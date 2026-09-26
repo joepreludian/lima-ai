@@ -18,5 +18,13 @@ grep -q '^use-ipv6=no$' "$conf"
 systemctl enable avahi-daemon
 systemctl restart avahi-daemon
 
+# Lima forwards UDP listeners that exist when its guest agent connects to the
+# host, ignore rule or not. chronyd's command port (localhost:323) is the only
+# one; chronyc uses the Unix socket instead.
+if [ -d /etc/chrony/conf.d ]; then
+  echo "cmdport 0" > /etc/chrony/conf.d/lima-ai.conf
+  systemctl try-restart chrony
+fi
+
 mkdir -p "$(dirname "$marker")"
 touch "$marker"

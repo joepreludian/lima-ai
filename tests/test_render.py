@@ -42,9 +42,7 @@ def test_template_core_settings(cfg):
 
 def test_every_port_forward_to_host_localhost_is_ignored(cfg):
     doc = yaml.safe_load(render_template(cfg))
-    assert doc["portForwards"] == [
-        {"guestIP": "0.0.0.0", "guestPortRange": [1, 65535], "proto": "any", "ignore": True}
-    ]
+    assert doc["portForwards"] == [{"guestIP": "0.0.0.0", "guestPortRange": [1, 65535], "proto": "any", "ignore": True}]
 
 
 def test_mounts_developer_dir_read_only_and_backups_writable(cfg):
@@ -141,6 +139,15 @@ def test_system_script_configures_avahi_for_lima0(cfg, tmp_path):
     assert "use-ipv6=no" in text
 
 
+def test_system_script_closes_chronys_udp_command_port(cfg, tmp_path):
+    # Lima forwards UDP listeners that exist when its agent connects to host
+    # ports despite the ignore rule; chronyd's localhost:323 is the only one.
+    render_base(cfg, tmp_path)
+    text = (tmp_path / "provision/10-system.sh").read_text()
+    assert "cmdport 0" in text
+    assert "/etc/chrony/conf.d/" in text
+
+
 def test_claude_script_sets_up_shell_and_onboarding(cfg, tmp_path):
     render_base(cfg, tmp_path)
     text = (tmp_path / "provision/50-claude.sh").read_text()
@@ -151,21 +158,47 @@ def test_claude_script_sets_up_shell_and_onboarding(cfg, tmp_path):
 
 def test_guest_scripts_are_available(cfg):
     verify = guest_script("verify-base.sh")
-    for check in ["hello-world", "node -v", "cargo -V", "claude --version", "rtk --version",
-                  "docker compose version", "docker-backup --version", "docker-backup doctor",
-                  "avahi-daemon --check"]:
+    for check in [
+        "hello-world",
+        "node -v",
+        "cargo -V",
+        "claude --version",
+        "rtk --version",
+        "docker compose version",
+        "docker-backup --version",
+        "docker-backup doctor",
+        "avahi-daemon --check",
+    ]:
         assert check in verify
     seal = guest_script("seal-base.sh")
-    for step in ["docker system prune -af", "/etc/machine-id", "/var/lib/dbus/machine-id",
-                 "/etc/ssh/ssh_host_", "ssh-keygen -A", "apt-get clean"]:
+    for step in [
+        "docker system prune -af",
+        "/etc/machine-id",
+        "/var/lib/dbus/machine-id",
+        "/etc/ssh/ssh_host_",
+        "ssh-keygen -A",
+        "apt-get clean",
+    ]:
         assert step in seal
 
 
 def test_rsync_excludes_default_list_plus_extras(tmp_path):
     cfg = Config(sync=SyncConfig(extra_excludes=("*.sqlite",)))
     lines = rsync_excludes(cfg).splitlines()
-    for pattern in ["node_modules/", "target/", ".venv/", "venv/", "__pycache__/", "dist/",
-                    "build/", ".next/", ".nuxt/", ".turbo/", ".cache/", ".DS_Store"]:
+    for pattern in [
+        "node_modules/",
+        "target/",
+        ".venv/",
+        "venv/",
+        "__pycache__/",
+        "dist/",
+        "build/",
+        ".next/",
+        ".nuxt/",
+        ".turbo/",
+        ".cache/",
+        ".DS_Store",
+    ]:
         assert pattern in lines
     assert lines[-1] == "*.sqlite"
     assert ".git/" not in lines and not any(line.startswith(".env") for line in lines)
