@@ -1,0 +1,1 @@
+{"type": "volume", "schema_version": 1, "volume": "pgdata", "created_at": "2026-09-26T14:15:00Z", "size_bytes": 12893184, "sha256": "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03", "tool": {"name": "docker-backup", "version": "0.4.0"}}
