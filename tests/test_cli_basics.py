@@ -25,3 +25,19 @@ def test_lima_ai_error_is_printed_with_step_and_exit_1(monkeypatch):
     assert result.exit_code == 1
     assert "error [clone]: limactl clone failed" in result.output
     assert "disk full" in result.output
+
+
+def test_template_command_prints_rendered_yaml(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    result = CliRunner().invoke(cli, ["template"])
+    assert result.exit_code == 0
+    assert "minimumLimaVersion: 2.0.0" in result.output
+    assert "{{" not in result.output
+
+
+def test_commands_needing_limactl_fail_clearly_without_it(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", str(tmp_path))
+    result = CliRunner().invoke(cli, ["base"])
+    assert result.exit_code == 1
+    assert "error [preflight]: limactl not found" in result.output

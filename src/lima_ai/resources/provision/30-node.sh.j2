@@ -1,0 +1,16 @@
+#!/bin/bash
+# Node.js {{ node_major }} through fnm, with corepack enabled.
+set -euo pipefail
+marker="$HOME/.local/state/lima-ai/30-node.done"
+[ -e "$marker" ] && exit 0
+
+fnm_dir="$HOME/.local/share/fnm"
+curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$fnm_dir" --skip-shell
+export PATH="$fnm_dir:$PATH"
+eval "$(fnm env --shell bash)"
+fnm install {{ node_major }}
+fnm default {{ node_major }}
+fnm exec --using={{ node_major }} corepack enable
+
+mkdir -p "$(dirname "$marker")"
+touch "$marker"

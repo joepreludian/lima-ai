@@ -1,0 +1,17 @@
+#!/bin/bash
+# docker-backup {{ docker_backup }} (pinned, checksum verified).
+set -euo pipefail
+marker="/var/lib/lima-ai/70-docker-backup.done"
+[ -e "$marker" ] && exit 0
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+name="docker-backup-{{ docker_backup }}-aarch64-unknown-linux-musl"
+curl -fsSL -o "$tmp/$name.tar.gz" \
+  "https://github.com/joepreludian/docker-backup/releases/download/v{{ docker_backup }}/$name.tar.gz"
+echo "{{ docker_backup_sha256 }}  $tmp/$name.tar.gz" | sha256sum -c -
+tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
+install -m 0755 "$tmp/$name/docker-backup" /usr/local/bin/docker-backup
+
+mkdir -p "$(dirname "$marker")"
+touch "$marker"

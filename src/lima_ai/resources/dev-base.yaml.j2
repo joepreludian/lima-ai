@@ -1,0 +1,43 @@
+# Rendered by lima-ai {{ version }}. Rebuild with `lima-ai base --rebuild`
+# instead of editing this file.
+minimumLimaVersion: 2.0.0
+base:
+- template:_images/ubuntu-{{ vm.ubuntu_release }}
+vmType: vz
+cpus: {{ vm.cpus }}
+memory: {{ vm.memory | tojson }}
+disk: {{ vm.disk | tojson }}
+vmOpts:
+  vz:
+    # Run linux/amd64 images.
+    rosetta:
+      enabled: true
+      binfmt: true
+networks:
+- vzNAT: true
+# Nothing is forwarded to host localhost: every VM serves on its own
+# address. guestIP 0.0.0.0 is needed, or Lima still forwards ports that
+# the guest binds on 0.0.0.0.
+portForwards:
+- guestIP: 0.0.0.0
+  guestPortRange: [1, 65535]
+  proto: any
+  ignore: true
+mountType: virtiofs
+mounts:
+- location: {{ developer_dir | tojson }}
+  writable: false
+- location: {{ backups_dir | tojson }}
+  mountPoint: /backups/docker
+  writable: true
+containerd:
+  system: false
+  user: false
+ssh:
+  forwardAgent: true
+provision:
+{% for name, mode in provision %}
+- mode: {{ mode }}
+  file:
+    url: provision/{{ name }}
+{% endfor %}

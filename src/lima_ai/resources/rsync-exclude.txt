@@ -1,0 +1,12 @@
+node_modules/
+target/
+.venv/
+venv/
+__pycache__/
+dist/
+build/
+.next/
+.nuxt/
+.turbo/
+.cache/
+.DS_Store

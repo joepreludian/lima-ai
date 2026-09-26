@@ -1,0 +1,17 @@
+#!/bin/bash
+# rtk {{ rtk }} (pinned, checksum verified) for the Claude Code hook.
+set -euo pipefail
+marker="$HOME/.local/state/lima-ai/60-rtk.done"
+[ -e "$marker" ] && exit 0
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+asset="rtk-aarch64-unknown-linux-gnu.tar.gz"
+curl -fsSL -o "$tmp/$asset" "https://github.com/rtk-ai/rtk/releases/download/v{{ rtk }}/$asset"
+echo "{{ rtk_sha256 }}  $tmp/$asset" | sha256sum -c -
+tar -xzf "$tmp/$asset" -C "$tmp"
+mkdir -p "$HOME/.local/bin"
+install -m 0755 "$tmp/rtk" "$HOME/.local/bin/rtk"
+
+mkdir -p "$(dirname "$marker")"
+touch "$marker"
