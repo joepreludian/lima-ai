@@ -35,9 +35,9 @@ lima-ai shell preludian/myapp feat-a  # then run `cc` (claude --dangerously-skip
 `<project>` is a folder relative to `~/Developer`. The VM's working copy is
 `~/work/<slug>`: a normal git checkout, so `git fetch/pull/push` work
 against the project's own remotes with your host identity. The host
-repository is also mounted read-only at its own path, so unpushed host
-commits can be fetched from it (`git fetch ~/Developer/<project> <branch>`
-uses the host path, e.g. `/Users/you/Developer/...`).
+repository is also mounted read-only at its host path, so unpushed host
+commits can be fetched from it in the VM:
+`git fetch /Users/<you>/Developer/<project> <branch>`.
 
 ## Commands
 
