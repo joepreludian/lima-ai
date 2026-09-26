@@ -105,6 +105,15 @@ def push_claude_and_git(feature: Feature, instance: Instance) -> None:
     push_git_config(feature.runner, instance, feature.host_home)
 
 
+def _git_position(run, repo: str) -> tuple[str, str] | None:
+    """(branch, commit) checked out in repo, or None when it is not a git repository."""
+    head = run(["git", "-C", repo, "rev-parse", "HEAD"], check=False, step="sync")
+    if head.returncode != 0:
+        return None
+    branch = run(["git", "-C", repo, "symbolic-ref", "-q", "--short", "HEAD"], check=False, step="sync")
+    return (branch.stdout.strip() or "(detached HEAD)", head.stdout.strip())
+
+
 def sync_project(feature: Feature, instance: Instance, ask: bool) -> None:
     source = project_dir(feature.cfg.developer_dir, feature.names)
     workdir = feature.workdir
@@ -113,10 +122,23 @@ def sync_project(feature: Feature, instance: Instance, ask: bool) -> None:
             "Note: files that exist on both sides are overwritten with the host version; "
             "files created only in the VM are kept."
         )
+        warnings = []
         status = feature.shell(["git", "-C", workdir, "status", "--porcelain"], check=False, step="sync")
         if status.returncode == 0 and status.stdout.strip():
-            note(f"The VM's working copy has uncommitted changes:\n{status.stdout.rstrip()}")
-            click.confirm("Overwrite files that also exist on the host?", abort=True, err=True)
+            warnings.append(f"The VM's working copy has uncommitted changes:\n{status.stdout.rstrip()}")
+        # .git is copied too, so a VM repo that has moved on gets the host's HEAD, refs and index.
+        host = _git_position(feature.runner.run, str(source))
+        guest = _git_position(feature.shell, workdir)
+        if host and guest and host != guest:
+            warnings.append(
+                f"The VM's repository is on {guest[0]} at {guest[1][:12]}, the host's on {host[0]} at "
+                f"{host[1][:12]}. The copy includes .git, so the VM's HEAD, index and branches that "
+                "exist on both sides become the host's (its own commits stay in the reflog). "
+                "To bring host commits in, use git fetch in the VM instead."
+            )
+        if warnings:
+            note("\n".join(warnings))
+            click.confirm("Overwrite them with the host's copy?", abort=True, err=True)
     feature.shell(["mkdir", "-p", workdir], step="sync")
     exclude_file = state_dir() / "rsync-exclude.txt"
     exclude_file.parent.mkdir(parents=True, exist_ok=True)

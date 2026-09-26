@@ -34,7 +34,10 @@ lima-ai shell preludian/myapp feat-a  # then run `cc` (claude --dangerously-skip
 
 `<project>` is a folder relative to `~/Developer`. The VM's working copy is
 `~/work/<slug>`: a normal git checkout, so `git fetch/pull/push` work
-against the project's own remotes with your host identity.
+against the project's own remotes with your host identity. The host
+repository is also mounted read-only at its own path, so unpushed host
+commits can be fetched from it (`git fetch ~/Developer/<project> <branch>`
+uses the host path, e.g. `/Users/you/Developer/...`).
 
 ## Commands
 
@@ -44,7 +47,7 @@ against the project's own remotes with your host identity.
 | `base [--rebuild]` | Build, verify and seal `dev-base` (Ubuntu 26.04, Docker, Node, Rust, Claude Code, rtk, docker-backup) |
 | `template` | Print the rendered `dev-base` Lima template |
 | `new <project> <feat> [--branch NAME] [--restore BACKUP] [--cpus N] [--memory X] [--disk X]` | Create a feature VM |
-| `sync <project> <feat>` | Copy the host project into the VM again (never deletes; asks if the VM's copy is dirty) |
+| `sync <project> <feat>` | Copy the host project into the VM again (never deletes; asks first if the VM's copy is dirty or its repo has moved away from the host's) |
 | `sync-claude <project> <feat>` | Push the Claude token, `~/.claude` subset and git config again |
 | `shell <project> <feat>` | Shell in the working copy, SSH agent forwarded |
 | `ls [--port N]` | Feature VMs with status, mDNS name, IP and URL |

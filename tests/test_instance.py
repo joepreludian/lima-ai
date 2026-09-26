@@ -354,3 +354,39 @@ def test_rm_forgets_instance_record(env):
     record.write_text("{}")
     env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"])
     assert not record.exists()
+
+
+def git_positions(env, host: tuple[str, str], guest: tuple[str, str]) -> None:
+    host_repo = env.cfg.developer_dir / "preludian/myapp"
+    env.runner.on(f"git -C {host_repo} symbolic-ref -q --short HEAD", host[0] + "\n")
+    env.runner.on(f"git -C {host_repo} rev-parse HEAD", host[1] + "\n")
+    env.runner.on(f"git -C {WORKDIR} symbolic-ref -q --short HEAD", guest[0] + "\n")
+    env.runner.on(f"git -C {WORKDIR} rev-parse HEAD", guest[1] + "\n")
+
+
+def test_sync_asks_when_vm_repo_has_moved_away_from_hosts(env):
+    existing(env)
+    git_positions(env, host=("main", "a" * 40), guest=("feat/a", "b" * 40))
+    result = env.invoke(["sync", "preludian/myapp", "feat-a"], input="n\n")
+    assert result.exit_code == 1
+    assert "feat/a" in result.output and "main" in result.output
+    assert "HEAD" in result.output
+    assert not env.runner.find("--exclude-from=")
+
+
+def test_sync_does_not_ask_when_vm_repo_matches_hosts(env):
+    existing(env)
+    git_positions(env, host=("main", "a" * 40), guest=("main", "a" * 40))
+    result = env.invoke(["sync", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert env.runner.find("--exclude-from=")
+
+
+def test_sync_skips_the_git_check_when_host_project_is_not_a_repo(env):
+    existing(env)
+    host_repo = env.cfg.developer_dir / "preludian/myapp"
+    env.runner.on(f"git -C {host_repo} rev-parse HEAD", returncode=128, stderr="fatal: not a git repository")
+    env.runner.on(f"git -C {WORKDIR} rev-parse HEAD", "b" * 40 + "\n")
+    result = env.invoke(["sync", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert env.runner.find("--exclude-from=")
