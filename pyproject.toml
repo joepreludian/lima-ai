@@ -1,0 +1,34 @@
+[project]
+name = "lima-ai"
+version = "0.1.0"
+description = "Disposable Lima VMs for running Claude Code agents in parallel, one feature per VM"
+readme = "README.md"
+authors = [
+    { name = "Jon Trigueiro", email = "joepreludian@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1",
+    "jinja2>=3.1",
+]
+
+[project.scripts]
+lima-ai = "lima_ai.cli:main"
+
+[dependency-groups]
+dev = [
+    "pex>=2.40",
+    "pytest>=8",
+    "pyyaml>=6",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not lima'"
+markers = [
+    "lima: integration tests that build real Lima VMs (slow, opt-in: pytest -m lima)",
+]
