@@ -122,7 +122,9 @@ def feature_command(name: str | None = None, **settings):
 
 @feature_command()
 @click.option("--branch", help="Create and switch to this branch in the VM's working copy.")
-@click.option("--restore", "restore_from", metavar="BACKUP", help="Restore this backup (under backups_dir) into the VM.")
+@click.option(
+    "--restore", "restore_from", metavar="BACKUP", help="Restore this backup (under backups_dir) into the VM."
+)
 @click.option("--cpus", type=int, help="CPUs for this VM (default: dev-base's).")
 @click.option("--memory", help="Memory in GiB, e.g. 16GiB (default: dev-base's).")
 @click.option("--disk", help="Disk size in GiB, e.g. 100GiB (default: dev-base's).")
@@ -185,8 +187,13 @@ def rm(app: App, project: str, feat: str, yes: bool, force: bool) -> None:
 @click.option("--full", is_flag=True, help="Back up the whole Docker daemon instead of this project.")
 @click.option("--no-images", is_flag=True, help="Leave out locally built images.")
 @click.option("--no-external", is_flag=True, help="Leave out the project's external volumes.")
-@click.option("--compose-file", "compose_files", multiple=True, metavar="FILE",
-              help="Compose file, relative to the project root (repeatable, in order); replaces detection.")
+@click.option(
+    "--compose-file",
+    "compose_files",
+    multiple=True,
+    metavar="FILE",
+    help="Compose file, relative to the project root (repeatable, in order); replaces detection.",
+)
 @pass_app
 def backup_command(app: App, project: str, feat: str, full, no_images, no_external, compose_files) -> None:
     """Back up the project's Docker volumes and built images from the VM to backups_dir."""
@@ -197,8 +204,13 @@ def backup_command(app: App, project: str, feat: str, full, no_images, no_extern
 @click.argument("backup_path", metavar="BACKUP")
 @click.option("--overwrite", is_flag=True, help="Empty and refill volumes that already exist in the VM.")
 @click.option("--full", is_flag=True, help="Restore everything in the backup under its recorded names.")
-@click.option("--compose-file", "compose_files", multiple=True, metavar="FILE",
-              help="Compose file, relative to the project root (repeatable, in order); replaces detection.")
+@click.option(
+    "--compose-file",
+    "compose_files",
+    multiple=True,
+    metavar="FILE",
+    help="Compose file, relative to the project root (repeatable, in order); replaces detection.",
+)
 @pass_app
 def restore_command(app: App, project: str, feat: str, backup_path, overwrite, full, compose_files) -> None:
     """Restore BACKUP (a path under backups_dir) into the VM."""

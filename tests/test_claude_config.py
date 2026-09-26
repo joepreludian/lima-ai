@@ -86,15 +86,34 @@ def test_rewrite_home_does_not_touch_other_users():
 
 def make_claude_dir(root: Path) -> Path:
     claude = root / ".claude"
-    for name in ["CLAUDE.md", "RTK.md", "statusline-command.sh", "history.jsonl", "settings.json.bak",
-                 ".credentials.json", "stats-cache.json"]:
+    for name in [
+        "CLAUDE.md",
+        "RTK.md",
+        "statusline-command.sh",
+        "history.jsonl",
+        "settings.json.bak",
+        ".credentials.json",
+        "stats-cache.json",
+    ]:
         (claude / name).parent.mkdir(parents=True, exist_ok=True)
         (claude / name).write_text(name)
     shutil.copy(FIXTURES / "settings.json", claude / "settings.json")
-    for rel in ["skills/demo/SKILL.md", "skills/demo/old.bak", "commands/x.md", "agents/a.md",
-                "plugins/cache/p/1.0/plugin.json", "plugins/marketplaces/m/marketplace.json",
-                "projects/p/session.jsonl", "sessions/s.json", "file-history/f", "cache/c",
-                "backups/b", "debug/d", "shell-snapshots/s", "todos/t.json"]:
+    for rel in [
+        "skills/demo/SKILL.md",
+        "skills/demo/old.bak",
+        "commands/x.md",
+        "agents/a.md",
+        "plugins/cache/p/1.0/plugin.json",
+        "plugins/marketplaces/m/marketplace.json",
+        "projects/p/session.jsonl",
+        "sessions/s.json",
+        "file-history/f",
+        "cache/c",
+        "backups/b",
+        "debug/d",
+        "shell-snapshots/s",
+        "todos/t.json",
+    ]:
         (claude / rel).parent.mkdir(parents=True, exist_ok=True)
         (claude / rel).write_text(rel)
     shutil.copy(FIXTURES / "installed_plugins.json", claude / "plugins/installed_plugins.json")
@@ -128,7 +147,9 @@ def test_stage_transformed_writes_filtered_settings_and_rewritten_plugin_json(tm
     result = json.loads((staging / "settings.json").read_text())
     assert result["statusLine"]["command"] == "bash /home/jon.linux/.claude/statusline-command.sh"
     assert "SessionStart" not in result["hooks"]
-    assert result["permissions"]["allow"][0] == "Bash(git -C /Users/jon/Developer/preludian/riscofauna log --oneline -5)"
+    assert (
+        result["permissions"]["allow"][0] == "Bash(git -C /Users/jon/Developer/preludian/riscofauna log --oneline -5)"
+    )
     plugins = json.loads((staging / "plugins/installed_plugins.json").read_text())
     install = plugins["plugins"]["superpowers@claude-plugins-official"][0]["installPath"]
     assert install == "/home/jon.linux/.claude/plugins/cache/claude-plugins-official/superpowers/6.4.1"
@@ -142,5 +163,13 @@ def test_stage_transformed_with_nothing_to_transform(tmp_path):
 
 
 def test_include_list_matches_spec():
-    assert INCLUDE == ("CLAUDE.md", "RTK.md", "settings.json", "statusline-command.sh",
-                       "skills", "plugins", "commands", "agents")
+    assert INCLUDE == (
+        "CLAUDE.md",
+        "RTK.md",
+        "settings.json",
+        "statusline-command.sh",
+        "skills",
+        "plugins",
+        "commands",
+        "agents",
+    )

@@ -31,9 +31,7 @@ def test_get_finds_by_name_or_none():
 def test_clone_passes_resource_overrides_in_gib():
     runner = FakeRunner()
     Limactl(runner).clone("dev-base", "dev-a-b", cpus=2, memory="16GiB", disk="100")
-    assert runner.commands == [
-        "limactl clone --tty=false dev-base dev-a-b --cpus 2 --memory 16 --disk 100"
-    ]
+    assert runner.commands == ["limactl clone --tty=false dev-base dev-a-b --cpus 2 --memory 16 --disk 100"]
 
 
 def test_clone_without_overrides():

@@ -49,9 +49,7 @@ class Feature:
     def running_instance(self) -> Instance:
         instance = self.instance()
         if not instance.running:
-            raise LimaAiError(
-                "instance", f"{self.name} is {instance.status}; start it with `{self.hint('start')}`"
-            )
+            raise LimaAiError("instance", f"{self.name} is {instance.status}; start it with `{self.hint('start')}`")
         return instance
 
     @property
@@ -124,7 +122,11 @@ def sync_project(feature: Feature, instance: Instance, ask: bool) -> None:
     exclude_file.parent.mkdir(parents=True, exist_ok=True)
     exclude_file.write_text(rsync_excludes(feature.cfg))
     argv = project_argv(
-        source, feature.name, feature.names.workdir, instance.ssh_config, exclude_file,
+        source,
+        feature.name,
+        feature.names.workdir,
+        instance.ssh_config,
+        exclude_file,
         progress_flags(feature.runner),
     )
     feature.runner.run(argv, interactive=True, step="sync")
@@ -287,4 +289,4 @@ def list_vms(runner: Runner, port: int) -> None:
     table = [["PROJECT", "FEAT", "STATUS", "MDNS", "IP", "URL"], *rows]
     widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
     for row in table:
-        click.echo("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip())
+        click.echo("  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip())

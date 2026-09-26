@@ -28,7 +28,13 @@ def test_ssh_host_is_limas_alias():
 def test_rsync_argv_uses_instance_ssh_config():
     argv = rsync_argv(["/src/"], "lima-dev-app-a:dest/", SSH_CONFIG, ["--stats"])
     assert argv == [
-        "rsync", "-a", "--stats", "-e", f"ssh -F {SSH_CONFIG}", "/src/", "lima-dev-app-a:dest/",
+        "rsync",
+        "-a",
+        "--stats",
+        "-e",
+        f"ssh -F {SSH_CONFIG}",
+        "/src/",
+        "lima-dev-app-a:dest/",
     ]
 
 
@@ -39,12 +45,21 @@ def test_ssh_config_path_with_spaces_is_quoted():
 
 def test_project_argv_copies_contents_into_workdir():
     argv = project_argv(
-        Path("/Users/jon/Developer/preludian/app"), "dev-app-a", "work/app", SSH_CONFIG,
-        Path("/state/rsync-exclude.txt"), ["--info=progress2"],
+        Path("/Users/jon/Developer/preludian/app"),
+        "dev-app-a",
+        "work/app",
+        SSH_CONFIG,
+        Path("/state/rsync-exclude.txt"),
+        ["--info=progress2"],
     )
     assert argv == [
-        "rsync", "-a", "--info=progress2", "--exclude-from=/state/rsync-exclude.txt",
-        "-e", f"ssh -F {SSH_CONFIG}",
-        "/Users/jon/Developer/preludian/app/", "lima-dev-app-a:work/app/",
+        "rsync",
+        "-a",
+        "--info=progress2",
+        "--exclude-from=/state/rsync-exclude.txt",
+        "-e",
+        f"ssh -F {SSH_CONFIG}",
+        "/Users/jon/Developer/preludian/app/",
+        "lima-dev-app-a:work/app/",
     ]
     assert "--delete" not in argv

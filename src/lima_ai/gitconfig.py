@@ -34,14 +34,16 @@ def _strip(runner: Runner, config: Path, home: Path, staging: Path) -> None:
         runner.run([*git, "--remove-section", section], step="gitconfig")
 
     helpers = {
-        key for key, value in entries
+        key
+        for key, value in entries
         if key.startswith("credential.") and key.endswith(".helper") and "osxkeychain" in value
     }
     for key in sorted(helpers):
         runner.run([*git, "--unset-all", key, "osxkeychain"], step="gitconfig")
 
     programs = {
-        key for key, value in entries
+        key
+        for key, value in entries
         if key.startswith("gpg.") and key.endswith(".program") and value.startswith(HOST_ONLY_PREFIXES)
     }
     for key in sorted(programs):

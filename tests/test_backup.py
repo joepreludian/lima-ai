@@ -124,16 +124,28 @@ def test_backup_name_is_slug_feat_utc_timestamp():
 
 
 def test_backup_argv_compose_scoped_joins_files_in_order():
-    assert backup_argv(["compose.yaml", "compose.override.yml"], "/backups/docker/n", full=False,
-                       no_images=False, no_external=False) == [
-        "docker-backup", "backup", "--from-docker-compose", "compose.yaml,compose.override.yml", "/backups/docker/n",
+    assert backup_argv(
+        ["compose.yaml", "compose.override.yml"], "/backups/docker/n", full=False, no_images=False, no_external=False
+    ) == [
+        "docker-backup",
+        "backup",
+        "--from-docker-compose",
+        "compose.yaml,compose.override.yml",
+        "/backups/docker/n",
     ]
 
 
 def test_backup_argv_passes_no_images_and_no_external():
     argv = backup_argv(["compose.yaml"], "/backups/docker/n", full=False, no_images=True, no_external=True)
-    assert argv == ["docker-backup", "backup", "--from-docker-compose", "compose.yaml",
-                    "--no-images", "--no-external", "/backups/docker/n"]
+    assert argv == [
+        "docker-backup",
+        "backup",
+        "--from-docker-compose",
+        "compose.yaml",
+        "--no-images",
+        "--no-external",
+        "/backups/docker/n",
+    ]
 
 
 def test_backup_argv_full_drops_from_docker_compose():
@@ -143,7 +155,12 @@ def test_backup_argv_full_drops_from_docker_compose():
 
 def test_restore_argv_never_has_yes():
     assert restore_argv(["compose.yaml"], "/backups/docker/n", overwrite=True) == [
-        "docker-backup", "restore", "--from-docker-compose", "compose.yaml", "/backups/docker/n", "--overwrite",
+        "docker-backup",
+        "restore",
+        "--from-docker-compose",
+        "compose.yaml",
+        "/backups/docker/n",
+        "--overwrite",
     ]
     assert restore_argv([], "/backups/docker/n", overwrite=False) == ["docker-backup", "restore", "/backups/docker/n"]
 
@@ -156,8 +173,15 @@ def host_cfg(tmp_path: Path) -> Config:
 
 
 def test_host_commands_compose_scoped(tmp_path):
-    lines = host_commands(host_cfg(tmp_path), "preludian/myapp", ["compose.yaml", "compose.override.yml"],
-                          explicit=False, name="myapp-feat-a-X", full=False, no_external=False)
+    lines = host_commands(
+        host_cfg(tmp_path),
+        "preludian/myapp",
+        ["compose.yaml", "compose.override.yml"],
+        explicit=False,
+        name="myapp-feat-a-X",
+        full=False,
+        no_external=False,
+    )
     text = "\n".join(lines)
     assert "cd ~/Developer/preludian/myapp" in text
     assert "docker compose stop" in text
@@ -173,21 +197,34 @@ def test_host_commands_compose_scoped(tmp_path):
 
 
 def test_host_commands_after_no_external_backup_skip_the_external_note(tmp_path):
-    text = "\n".join(host_commands(host_cfg(tmp_path), "app", ["compose.yaml"], explicit=False,
-                                   name="n", full=False, no_external=True))
+    text = "\n".join(
+        host_commands(
+            host_cfg(tmp_path), "app", ["compose.yaml"], explicit=False, name="n", full=False, no_external=True
+        )
+    )
     assert "external volumes" not in text
 
 
 def test_host_commands_with_explicit_files_pass_them_to_compose(tmp_path):
-    text = "\n".join(host_commands(host_cfg(tmp_path), "app", ["ops/a.yml", "ops/b.yml"], explicit=True,
-                                   name="n", full=False, no_external=False))
+    text = "\n".join(
+        host_commands(
+            host_cfg(tmp_path),
+            "app",
+            ["ops/a.yml", "ops/b.yml"],
+            explicit=True,
+            name="n",
+            full=False,
+            no_external=False,
+        )
+    )
     assert "docker compose -f ops/a.yml -f ops/b.yml stop" in text
     assert "docker compose -f ops/a.yml -f ops/b.yml up -d" in text
 
 
 def test_host_commands_full_print_plain_restore(tmp_path):
-    lines = host_commands(host_cfg(tmp_path), "app", ["compose.yaml"], explicit=False, name="n",
-                          full=True, no_external=False)
+    lines = host_commands(
+        host_cfg(tmp_path), "app", ["compose.yaml"], explicit=False, name="n", full=True, no_external=False
+    )
     restore = [line for line in lines if "docker-backup restore" in line]
     assert restore and all("--from-docker-compose" not in line for line in restore)
     text = "\n".join(lines)
@@ -197,8 +234,9 @@ def test_host_commands_full_print_plain_restore(tmp_path):
 
 def test_host_paths_with_spaces_are_quoted(tmp_path):
     cfg = Config(developer_dir=Path.home() / "My Dev", backups_dir=Path.home() / "My Dev/backups")
-    text = "\n".join(host_commands(cfg, "my app", ["compose.yaml"], explicit=False, name="n",
-                                   full=False, no_external=False))
+    text = "\n".join(
+        host_commands(cfg, "my app", ["compose.yaml"], explicit=False, name="n", full=False, no_external=False)
+    )
     assert "cd ~/'My Dev/my app'" in text
 
 
@@ -220,7 +258,7 @@ def test_relative_backup_path_is_inside_backups_dir(backups):
 
 
 def test_absolute_backup_path_inside_backups_dir(backups):
-    host, guest = resolve_backup(backups, str(backups.backups_dir / "old.tar.bz2") + "")
+    _, guest = resolve_backup(backups, str(backups.backups_dir / "old.tar.bz2"))
     assert guest == "/backups/docker/old.tar.bz2"
 
 

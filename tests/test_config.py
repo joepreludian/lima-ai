@@ -71,7 +71,7 @@ def test_unknown_keys_are_an_error(tmp_path, text, key):
 
 @pytest.mark.parametrize(
     "text",
-    ['app_port = "8002"\n', "[vm]\ncpus = true\n", "[vm]\nmemory = 8\n", "[sync]\nextra_excludes = \"x\"\n"],
+    ['app_port = "8002"\n', "[vm]\ncpus = true\n", "[vm]\nmemory = 8\n", '[sync]\nextra_excludes = "x"\n'],
 )
 def test_wrong_value_types_are_an_error(tmp_path, text):
     with pytest.raises(LimaAiError) as excinfo:

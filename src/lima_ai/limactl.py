@@ -53,9 +53,7 @@ class Limactl:
         return next((i for i in self.list() if i.name == name), None)
 
     def create_and_start(self, name: str, template: Path) -> None:
-        self.runner.run(
-            ["limactl", "start", "--name", name, "--tty=false", template], interactive=True, step="start"
-        )
+        self.runner.run(["limactl", "start", "--name", name, "--tty=false", template], interactive=True, step="start")
 
     def start(self, name: str) -> None:
         self.runner.run(["limactl", "start", "--tty=false", name], interactive=True, step="start")

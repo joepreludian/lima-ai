@@ -32,3 +32,10 @@ addopts = "-m 'not lima'"
 markers = [
     "lima: integration tests that build real Lima VMs (slow, opt-in: pytest -m lima)",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]

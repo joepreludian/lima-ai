@@ -178,9 +178,7 @@ def _host_listing(root: Path) -> tuple[set[str], str | None]:
     return names, dotenv
 
 
-def run_backup(
-    feature: Feature, full: bool, no_images: bool, no_external: bool, explicit: Sequence[str]
-) -> None:
+def run_backup(feature: Feature, full: bool, no_images: bool, no_external: bool, explicit: Sequence[str]) -> None:
     if full and (no_external or explicit):
         raise LimaAiError("backup", "--no-external and --compose-file cannot be combined with --full")
     feature.running_instance()
@@ -212,15 +210,11 @@ def run_backup(
         host_files = detect_compose_files(host_names, host_dotenv) or files
     click.echo(f"\nBackup written to {feature.cfg.backups_dir / name}")
     click.echo("To bring it into the host's Colima:")
-    for line in host_commands(
-        feature.cfg, feature.names.project, host_files, bool(explicit), name, full, no_external
-    ):
+    for line in host_commands(feature.cfg, feature.names.project, host_files, bool(explicit), name, full, no_external):
         click.echo(f"  {line}")
 
 
-def run_restore(
-    feature: Feature, backup: str, overwrite: bool, full: bool, explicit: Sequence[str]
-) -> None:
+def run_restore(feature: Feature, backup: str, overwrite: bool, full: bool, explicit: Sequence[str]) -> None:
     if full and explicit:
         raise LimaAiError("restore", "--compose-file cannot be combined with --full")
     _, source = resolve_backup(feature.cfg, backup)

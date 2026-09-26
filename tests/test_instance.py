@@ -59,7 +59,7 @@ def test_new_copies_project_into_guest_workdir(env):
     env.write_token()
     base_then_clone(env)
     env.invoke(["new", "preludian/myapp", "feat-a"])
-    project = [c for c in env.runner.commands if "--exclude-from=" in c][0]
+    project = next(c for c in env.runner.commands if "--exclude-from=" in c)
     assert project.endswith(f"{env.cfg.developer_dir}/preludian/myapp/ lima-{INSTANCE}:work/myapp/")
     exclude_file = state_dir() / "rsync-exclude.txt"
     assert "node_modules/" in exclude_file.read_text()
@@ -251,7 +251,9 @@ def test_commands_work_after_host_project_folder_is_gone(env):
 def test_ls_lists_feature_vms_but_not_base(env):
     env.runner.on(
         "limactl list --json",
-        lima_list(("dev-base", "Stopped"), (INSTANCE, "Running"), ("dev-other-thing-b", "Stopped"), ("default", "Running")),
+        lima_list(
+            ("dev-base", "Stopped"), (INSTANCE, "Running"), ("dev-other-thing-b", "Stopped"), ("default", "Running")
+        ),
     )
     (state_dir() / "instances").mkdir(parents=True)
     (state_dir() / f"instances/{INSTANCE}.json").write_text(
@@ -261,8 +263,14 @@ def test_ls_lists_feature_vms_but_not_base(env):
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
     assert lines[0].split() == ["PROJECT", "FEAT", "STATUS", "MDNS", "IP", "URL"]
-    assert lines[1].split() == ["myapp", "feat-a", "Running", f"lima-{INSTANCE}.local", "192.168.64.8",
-                                f"http://lima-{INSTANCE}.local:3000"]
+    assert lines[1].split() == [
+        "myapp",
+        "feat-a",
+        "Running",
+        f"lima-{INSTANCE}.local",
+        "192.168.64.8",
+        f"http://lima-{INSTANCE}.local:3000",
+    ]
     assert lines[2].split() == ["?", "other-thing-b", "Stopped", "lima-dev-other-thing-b.local", "-", "-"]
     assert len(lines) == 3
 

@@ -63,10 +63,7 @@ def filter_hooks(settings: dict, host_home: str, developer_dir: str) -> dict:
 
     def keep(hook: dict) -> bool:
         command = hook.get("command", "")
-        return all(
-            _available_in_guest(path, developer_rel)
-            for path in _referenced_home_paths(command, host_home)
-        )
+        return all(_available_in_guest(path, developer_rel) for path in _referenced_home_paths(command, host_home))
 
     for event in list(hooks):
         groups = []
@@ -89,9 +86,7 @@ def rewrite_home(text: str, host_home: str, guest_home: str, developer_dir: str)
     return re.sub(pattern, guest_home.rstrip("/") + "/", text)
 
 
-def stage_transformed(
-    claude_dir: Path, staging: Path, host_home: str, guest_home: str, developer_dir: str
-) -> None:
+def stage_transformed(claude_dir: Path, staging: Path, host_home: str, guest_home: str, developer_dir: str) -> None:
     """Write the transformed settings.json and plugins/*.json into staging."""
     staging.mkdir(parents=True, exist_ok=True)
     settings = claude_dir / "settings.json"

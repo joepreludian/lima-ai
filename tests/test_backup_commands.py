@@ -1,4 +1,3 @@
-import json
 import re
 from pathlib import Path
 
@@ -87,8 +86,18 @@ def test_backup_full_rejects_no_external_and_compose_file(env):
 
 def test_backup_with_explicit_compose_files(env):
     running_vm(env)
-    result = env.invoke(["backup", "preludian/myapp", "feat-a", "--compose-file", "ops/a.yml",
-                         "--compose-file", "ops/b.yml", "--no-images"])
+    result = env.invoke(
+        [
+            "backup",
+            "preludian/myapp",
+            "feat-a",
+            "--compose-file",
+            "ops/a.yml",
+            "--compose-file",
+            "ops/b.yml",
+            "--no-images",
+        ]
+    )
     assert result.exit_code == 0, result.output
     cmds = docker_commands(env)
     assert cmds[0] == "docker compose -f ops/a.yml -f ops/b.yml stop"
@@ -184,7 +193,14 @@ def test_restore_full_leaves_out_from_docker_compose(env):
     name = make_backup(env)
     env.invoke(["restore", "preludian/myapp", "feat-a", name, "--full"])
     assert env.runner.find("docker-backup restore")[0].argv == [
-        "limactl", "shell", "--workdir", WORKDIR, INSTANCE, "docker-backup", "restore", f"/backups/docker/{name}",
+        "limactl",
+        "shell",
+        "--workdir",
+        WORKDIR,
+        INSTANCE,
+        "docker-backup",
+        "restore",
+        f"/backups/docker/{name}",
     ]
 
 

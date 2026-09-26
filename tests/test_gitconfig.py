@@ -76,7 +76,9 @@ def test_known_hosts_copied_private_keys_never(home, tmp_path):
 
 def test_host_only_signing_program_is_stripped_with_signing(home, tmp_path):
     with (home / ".gitconfig").open("a") as f:
-        f.write('[gpg]\n\tformat = ssh\n[gpg "ssh"]\n\tprogram = /Applications/1Password.app/Contents/MacOS/op-ssh-sign\n')
+        f.write(
+            '[gpg]\n\tformat = ssh\n[gpg "ssh"]\n\tprogram = /Applications/1Password.app/Contents/MacOS/op-ssh-sign\n'
+        )
         f.write("[commit]\n\tgpgsign = true\n[tag]\n\tgpgsign = true\n")
     staging = tmp_path / "staging"
     stage_git_files(Runner(), home, staging)
