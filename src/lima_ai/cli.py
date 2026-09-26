@@ -1,10 +1,9 @@
 import shutil
 import sys
-from dataclasses import dataclass, field
 
 import click
 
-from lima_ai import __version__, base
+from lima_ai import __version__, auth, base
 from lima_ai.config import Config, load_config
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
@@ -29,10 +28,13 @@ class LimaAiGroup(click.Group):
             sys.exit(1)
 
 
-@dataclass
 class App:
-    verbose: bool
-    _config: Config | None = field(default=None, repr=False)
+    """What every command needs; tests pass their own runner and config."""
+
+    def __init__(self, verbose: bool = False, runner: Runner | None = None, config: Config | None = None):
+        self.verbose = verbose
+        self._runner = runner
+        self._config = config
 
     @property
     def config(self) -> Config:
@@ -42,7 +44,9 @@ class App:
 
     @property
     def runner(self) -> Runner:
-        return Runner(verbose=self.verbose)
+        if self._runner is None:
+            self._runner = Runner(verbose=self.verbose)
+        return self._runner
 
     def require(self, *tools: str) -> None:
         for tool in tools:
@@ -59,7 +63,8 @@ pass_app = click.make_pass_decorator(App)
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
     """Disposable Lima VMs for running Claude Code agents in parallel."""
-    ctx.obj = App(verbose=verbose)
+    if ctx.obj is None:
+        ctx.obj = App(verbose=verbose)
 
 
 @cli.command()
@@ -76,6 +81,20 @@ def base_command(app: App, rebuild: bool) -> None:
     """Build the golden dev-base VM that feature VMs are cloned from."""
     app.require("limactl")
     base.build(app.config, app.runner, rebuild)
+
+
+@cli.command("auth")
+@click.option("--from-stdin", is_flag=True, help="Read the token from stdin instead of running claude.")
+@pass_app
+def auth_command(app: App, from_stdin: bool) -> None:
+    """Create a long-lived Claude token for the VMs and store it (mode 600)."""
+    if from_stdin:
+        token = sys.stdin.read()
+    else:
+        auth.run_setup_token(app.runner)
+        token = click.prompt("Paste the token printed above", hide_input=True)
+    auth.write_token(token)
+    click.echo(f"Token saved to {auth.token_path()}")
 
 
 def main() -> None:

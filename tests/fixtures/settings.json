@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/jon/Developer/preludian/riscofauna log --oneline -5)",
+      "Read(//Users/jon/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/**)"
+    ]
+  },
+  "model": "opus[1m]",
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "rtk hook claude"}]},
+      {"matcher": "*", "hooks": [{"type": "command", "command": "/Users/jon/.claude-display/push-event.sh"}]}
+    ],
+    "SessionStart": [
+      {"hooks": [{"type": "command", "command": "/Users/jon/.claude-display/push-event.sh"}]}
+    ],
+    "Stop": [
+      {"hooks": [
+        {"type": "command", "command": "/Users/jon/.claude-display/push-event.sh"},
+        {"type": "command", "command": "bash /Users/jon/.claude/statusline-command.sh --stop"}
+      ]}
+    ],
+    "Notification": [
+      {"hooks": [{"type": "command", "command": "~/.claude-display/push-event.sh"}]}
+    ],
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": "\"$HOME/bin/notify\" prompt"}]}
+    ],
+    "PostToolUse": [
+      {"matcher": "Edit", "hooks": [{"type": "command", "command": "/Users/jon/Developer/tools/format.sh"}]}
+    ]
+  },
+  "statusLine": {"type": "command", "command": "bash /Users/jon/.claude/statusline-command.sh"},
+  "enabledPlugins": {"superpowers@claude-plugins-official": true},
+  "theme": "auto"
+}
