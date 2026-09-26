@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,14 @@ def env(tmp_path, monkeypatch):
     """Isolated host: config/state dirs, a Developer dir with a project, a home with ~/.claude."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    # Commands check that limactl and rsync are installed; FakeRunner answers
+    # every call, so these stubs only have to exist (and fail if ever run).
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    for tool in ("limactl", "rsync"):
+        (stubs / tool).write_text("#!/bin/sh\necho 'stub: not for running' >&2\nexit 99\n")
+        (stubs / tool).chmod(0o755)
+    monkeypatch.setenv("PATH", f"{stubs}:{os.environ['PATH']}")
     developer = tmp_path / "Developer"
     (developer / "preludian/myapp").mkdir(parents=True)
     home = tmp_path / "home"
