@@ -120,3 +120,8 @@ flowchart LR
     branches before you merge them. Services listening on your Mac's
     `localhost` (a local database, say) are reachable from every VM, so
     don't leave anything there that an agent shouldn't touch.
+
+## Next steps
+
+- [Installation](install.md): requirements and how to install lima-ai.
+- [Quickstart](quickstart.md): run two features of a project side by side.

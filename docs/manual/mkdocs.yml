@@ -44,6 +44,8 @@ theme:
 
 nav:
   - Introduction: index.md
+  - Installation: install.md
+  - Quickstart: quickstart.md
 
 markdown_extensions:
   - abbr
