@@ -48,6 +48,9 @@ nav:
   - Quickstart: quickstart.md
   - Everyday tasks: everyday.md
   - Command reference: commands.md
+  - Configuration: configuration.md
+  - Troubleshooting: troubleshooting.md
+  - Development: development.md
 
 markdown_extensions:
   - abbr
