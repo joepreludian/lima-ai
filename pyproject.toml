@@ -15,6 +15,10 @@ dependencies = [
 [project.scripts]
 lima-ai = "lima_ai.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/joepreludian/lima-ai"
+Documentation = "https://lima-ai.readthedocs.io/"
+
 [dependency-groups]
 dev = [
     "pex>=2.40",
