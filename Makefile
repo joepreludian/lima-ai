@@ -1,4 +1,4 @@
-.PHONY: test test-lima lint pex clean
+.PHONY: test test-lima lint pex docs docs-build clean
 
 test:
 	uv run pytest
@@ -15,3 +15,9 @@ pex:
 
 clean:
 	rm -rf dist
+
+docs:
+	uv run --with-requirements docs/manual/requirements.txt mkdocs serve -f docs/manual/mkdocs.yml
+
+docs-build:
+	uv run --with-requirements docs/manual/requirements.txt mkdocs build --strict -f docs/manual/mkdocs.yml
