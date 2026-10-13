@@ -46,6 +46,8 @@ nav:
   - Introduction: index.md
   - Installation: install.md
   - Quickstart: quickstart.md
+  - Everyday tasks: everyday.md
+  - Command reference: commands.md
 
 markdown_extensions:
   - abbr

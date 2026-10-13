@@ -107,3 +107,6 @@ lima-ai rm preludian/myapp feat-login
     `rm` looks for uncommitted changes and unpushed commits in the VM before
     deleting it. If it finds any, it lists them and asks a second time;
     `--yes` skips only the first question, and `--force` skips both.
+
+See [Everyday tasks](everyday.md) for syncing, pausing and backing up VMs,
+and the [Command reference](commands.md) for every flag.
