@@ -7,6 +7,21 @@ authors = [
     { name = "Jon Trigueiro", email = "joepreludian@gmail.com" }
 ]
 requires-python = ">=3.12"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+keywords = ["lima", "claude", "claude-code", "vm", "docker", "macos", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
+    "Topic :: System :: Emulators",
+]
 dependencies = [
     "click>=8.1",
     "jinja2>=3.1",
@@ -18,6 +33,7 @@ lima-ai = "lima_ai.cli:main"
 [project.urls]
 Homepage = "https://github.com/joepreludian/lima-ai"
 Documentation = "https://lima-ai.readthedocs.io/"
+Changelog = "https://github.com/joepreludian/lima-ai/releases"
 
 [dependency-groups]
 dev = [

@@ -1,13 +1,14 @@
+from importlib.metadata import version
+
 from click.testing import CliRunner
 
-from lima_ai import __version__
 from lima_ai.cli import cli
 
 
 def test_version_flag_prints_package_version():
     result = CliRunner().invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert __version__ in result.output
+    assert version("lima-ai") in result.output
 
 
 def test_lima_ai_error_is_printed_with_step_and_exit_1(monkeypatch):

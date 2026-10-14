@@ -1,4 +1,4 @@
-.PHONY: test test-lima lint pex docs docs-build clean
+.PHONY: test test-lima lint build pex docs docs-build clean
 
 test:
 	uv run pytest
@@ -9,6 +9,9 @@ test-lima:
 lint:
 	uvx ruff check src tests
 	uvx ruff format --check src tests
+
+build:
+	uv build
 
 pex:
 	uv run pex . -c lima-ai --scie eager -o dist/lima-ai
