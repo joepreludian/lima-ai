@@ -1,5 +1,10 @@
 # Troubleshooting
 
+Start with `lima-ai doctor`. It checks the platform, Rosetta, Lima,
+rsync, Claude Code, your SSH agent, `config.toml`, the Claude token,
+`dev-base` and docker-backup, then lists each problem with the command
+that fixes it.
+
 **`new` failed halfway.** The VM is kept, and the error names the step that
 failed. Fix the cause, then run `lima-ai sync …` if the project copy failed,
 or `lima-ai sync-claude …` for the token, Claude or git steps. To start

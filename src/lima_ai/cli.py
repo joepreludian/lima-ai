@@ -4,16 +4,11 @@ from pathlib import Path
 
 import click
 
-from lima_ai import __version__, auth, backup, base, instance
+from lima_ai import __version__, auth, backup, base, doctor, instance
 from lima_ai.config import Config, load_config
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
 from lima_ai.runner import Runner
-
-TOOL_HINTS = {
-    "limactl": "install Lima: brew install lima",
-    "rsync": "rsync ships with macOS; check your PATH",
-}
 
 
 class LimaAiGroup(click.Group):
@@ -59,7 +54,7 @@ class App:
     def require(self, *tools: str) -> None:
         for tool in tools:
             if shutil.which(tool) is None:
-                raise LimaAiError("preflight", f"{tool} not found on PATH ({TOOL_HINTS[tool]})")
+                raise LimaAiError("preflight", f"{tool} not found on PATH ({doctor.TOOL_HINTS[tool]})")
 
     def feature(self, project: str, feat: str) -> instance.Feature:
         self.require("limactl")
@@ -224,6 +219,16 @@ def ls(app: App, port: int | None) -> None:
     """List feature VMs with their mDNS name, IP and app URL."""
     app.require("limactl")
     instance.list_vms(app.runner, port or app.config.app_port)
+
+
+@cli.command("doctor")
+@pass_app
+def doctor_command(app: App) -> None:
+    """Check that this machine has everything lima-ai needs."""
+    checks = doctor.run_checks(app.runner)
+    click.echo(doctor.render(checks), nl=False)
+    if any(check.status == "fail" for check in checks):
+        sys.exit(1)
 
 
 def main() -> None:

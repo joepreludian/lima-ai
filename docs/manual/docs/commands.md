@@ -2,6 +2,7 @@
 
 | Command | What it does |
 |---|---|
+| `doctor` | Check that this machine has the tools and setup lima-ai needs; exits 1 if something required is missing |
 | `auth [--from-stdin]` | Run `claude setup-token` and store the token (mode 600) |
 | `base [--rebuild]` | Build, check, seal and stop `dev-base` |
 | `template` | Print the rendered `dev-base` Lima template |

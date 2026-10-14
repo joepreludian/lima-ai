@@ -64,7 +64,8 @@ with `uv tool install .` or `make pex`. The
 [Installation](https://lima-ai.readthedocs.io/install/) page covers
 all three.
 
-Check it with `lima-ai --version`.
+Check it with `lima-ai --version`, then run `lima-ai doctor` to see what
+else is missing.
 
 ## Development
 

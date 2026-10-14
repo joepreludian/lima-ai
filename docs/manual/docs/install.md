@@ -68,4 +68,5 @@ make pex                         # writes dist/lima-ai
 cp dist/lima-ai ~/.local/bin/
 ```
 
-Check it with `lima-ai --version`, then follow the [Quickstart](quickstart.md).
+Check it with `lima-ai --version`, run `lima-ai doctor` to see what is still
+missing, then follow the [Quickstart](quickstart.md).
