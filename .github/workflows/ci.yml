@@ -84,7 +84,7 @@ jobs:
       - name: Smoke-test the executable
         run: dist/lima-ai --version
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.target }}
           path: dist/
