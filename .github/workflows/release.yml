@@ -1,0 +1,195 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Resolve the version
+        id: version
+        run: |
+          version="$(uv version --short)"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match pyproject.toml version $version"
+              exit 1
+            fi
+            publish=true
+          else
+            publish=false
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          {
+            echo "### lima-ai $version"
+            if [ "$publish" = "true" ]; then
+              echo "Publishing to PyPI and GitHub Releases."
+            else
+              echo "Dry run: nothing is published."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-python:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Check the distributions
+        run: uv run --no-project --with twine twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+
+  build-executables:
+    name: build-executables (${{ matrix.target }})
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --group dev
+
+      - name: Build the executable
+        run: make pex
+
+      - name: Check the executable's version
+        run: |
+          output="$(dist/lima-ai --version)"
+          echo "$output"
+          [ "$output" = "lima-ai, version $VERSION" ]
+
+      - name: Package the tarball
+        run: |
+          name="lima-ai-$VERSION-$TARGET"
+          mkdir "$name"
+          cp dist/lima-ai README.md LICENSE "$name/"
+          tar -czf "dist/$name.tar.gz" "$name"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{ matrix.target }}
+          path: dist/*.tar.gz
+
+  publish-pypi:
+    needs: [resolve, build-python]
+    if: needs.resolve.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/lima-ai/${{ needs.resolve.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: python-dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: [resolve, build-executables, publish-pypi]
+    if: needs.resolve.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: tarball-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Write checksums
+        working-directory: dist
+        run: sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Write release notes preamble
+        run: |
+          cat > preamble.md <<NOTES
+          ## Install
+
+          From PyPI (recommended):
+
+          \`\`\`bash
+          uv tool install lima-ai==$VERSION
+          \`\`\`
+
+          Or download the self-contained executable for your platform below, check
+          it against \`SHA256SUMS\`, and copy \`lima-ai\` onto your \`PATH\`:
+
+          | Platform | File |
+          |---|---|
+          | macOS, Apple Silicon | \`lima-ai-$VERSION-aarch64-apple-darwin.tar.gz\` |
+          | Linux, x86_64 | \`lima-ai-$VERSION-x86_64-unknown-linux-gnu.tar.gz\` |
+          | Linux, arm64 | \`lima-ai-$VERSION-aarch64-unknown-linux-gnu.tar.gz\` |
+
+          The macOS executable is not signed, so macOS blocks its first run; clear
+          that with:
+
+          \`\`\`bash
+          xattr -d com.apple.quarantine ~/.local/bin/lima-ai
+          \`\`\`
+          NOTES
+
+      - name: Create the release
+        run: |
+          prerelease=""
+          case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file preamble.md \
+            --generate-notes \
+            --verify-tag \
+            $prerelease \
+            dist/*.tar.gz dist/SHA256SUMS
