@@ -8,7 +8,7 @@
   `softwareupdate --install-rosetta --agree-to-license`
 - Claude Code on the Mac, signed in with a Max subscription
 - An SSH key loaded in `ssh-agent`, so git over SSH works in the VMs
-- [uv](https://docs.astral.sh/uv/), to install lima-ai from PyPI or from source
+- [uv](https://docs.astral.sh/uv/) (or pipx), to install lima-ai from PyPI or from source
 - Optional: [docker-backup](https://docker-backup.readthedocs.io) 0.4.0 or
   later, to restore VM backups into the Mac's Colima:
   `brew install joepreludian/tap/docker-backup`
@@ -21,7 +21,9 @@
 uv tool install lima-ai
 ```
 
-Upgrade later with `uv tool upgrade lima-ai`.
+Upgrade later with `uv tool upgrade lima-ai`. With
+[pipx](https://pipx.pypa.io) instead: `pipx install lima-ai` and
+`pipx upgrade lima-ai`.
 
 ### Executable from GitHub Releases
 

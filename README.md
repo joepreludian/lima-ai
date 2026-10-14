@@ -54,7 +54,7 @@ The manual is at **https://lima-ai.readthedocs.io/**:
 From PyPI (recommended):
 
 ```bash
-uv tool install lima-ai
+uv tool install lima-ai      # or: pipx install lima-ai
 ```
 
 Or download a self-contained executable (macOS Apple Silicon, Linux x86_64 or
