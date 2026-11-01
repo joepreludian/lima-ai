@@ -2,6 +2,7 @@
 
 import shutil
 
+from tests.fakes import lima_list
 from tests.test_instance import INSTANCE, WORKDIR, base_then_clone
 
 # Interactive runs end with the shell offer (Task 8); "n" answers it. Extra
@@ -59,6 +60,37 @@ def test_new_no_branch_skips_the_branch_step(env):
     result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-branch"])
     assert result.exit_code == 0, result.output
     assert switch_commands(env) == []
+
+
+def test_new_sanitises_a_workspace_argument_before_it_becomes_the_branch(env):
+    ready(env)
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), ("dev-myapp-feat-login", "Running")))
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped")), times=1)
+    result = env.invoke(["new", "preludian/myapp", "Feat_Login"])
+    assert result.exit_code == 0, result.output
+    assert "using workspace name feat-login" in result.output
+    assert switch_commands(env) == [f"limactl shell dev-myapp-feat-login git -C {WORKDIR} switch -c feat-login"]
+    assert "Open it with: lima-ai shell preludian/myapp feat-login" in result.output
+
+
+def test_new_prefills_the_branch_prompt_with_the_sanitised_workspace(env):
+    ready(env)
+    result = env.invoke(["new", "preludian/myapp", "Feat_Login"], input="\n" + NO_SHELL, interactive=True)
+    assert "Git branch [feat-login]:" in result.output
+
+
+def test_new_does_not_note_the_workspace_name_when_it_is_already_clean(env):
+    ready(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert "using workspace name" not in result.output
+
+
+def test_new_rejects_an_empty_branch(env):
+    ready(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--branch", ""])
+    assert result.exit_code == 1
+    assert "error [usage]: --branch needs a branch name" in result.output
+    assert not env.runner.find("limactl clone")
 
 
 def test_new_warns_when_the_project_has_no_git_and_runs_no_git_command(env):

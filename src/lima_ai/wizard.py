@@ -39,6 +39,8 @@ def fill(
 ) -> Request:
     if branch and no_branch:
         raise LimaAiError("usage", "--branch and --no-branch cannot be combined")
+    if branch == "":
+        raise LimaAiError("usage", "--branch needs a branch name")
     if (project is None or workspace is None) and not interactive:
         raise LimaAiError("usage", "PROJECT and WORKSPACE are required outside a terminal")
     if project is None:
@@ -50,8 +52,7 @@ def fill(
             f"warning: {cfg.developer_dir / project} is not a git repository; no branch will be created "
             "and destroy cannot check it for unsaved work"
         )
-    if workspace is None:
-        workspace = ask_workspace(cfg, project)
+    workspace = ask_workspace(cfg, project) if workspace is None else clean_workspace(cfg, project, workspace)
     if not git or no_branch:
         branch = None
     elif branch is None:
@@ -77,13 +78,17 @@ def ask_workspace(cfg: Config, project: str) -> str:
     while True:
         raw = click.prompt("Workspace name", err=True)
         try:
-            names = resolve(cfg.developer_dir, project, raw)
+            return clean_workspace(cfg, project, raw)
         except LimaAiError as err:
             note(f"error [{err.step}]: {err.message}")
-            continue
-        if names.workspace != raw:
-            note(f"using workspace name {names.workspace}")
-        return names.workspace
+
+
+def clean_workspace(cfg: Config, project: str, raw: str) -> str:
+    """The sanitised workspace name (noted when it differs), so the branch default and the VM name agree."""
+    workspace = resolve(cfg.developer_dir, project, raw).workspace
+    if workspace != raw:
+        note(f"using workspace name {workspace}")
+    return workspace
 
 
 def ask_branch(workspace: str) -> str:
