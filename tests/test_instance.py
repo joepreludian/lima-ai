@@ -169,6 +169,61 @@ def test_new_records_instance_for_list(env):
     assert CREATED_AT.fullmatch(record["created_at"])
 
 
+def instance_file_pushes(env):
+    return [c for c in env.runner.calls if c.input and c.input.startswith("LIMA_AI_PROJECT=")]
+
+
+def test_new_writes_the_instance_file_into_the_vm(env):
+    env.write_token()
+    base_then_clone(env)
+    env.invoke(["new", "preludian/myapp", "feat-a"])
+    record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
+    pushes = instance_file_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "umask 077" in pushes[0].command
+    assert "cat > ~/.config/lima-ai/instance" in pushes[0].command
+    assert pushes[0].input == (
+        "LIMA_AI_PROJECT=preludian/myapp\nLIMA_AI_WORKSPACE=feat-a\nLIMA_AI_WORKDIR=work/myapp\n"
+        f"LIMA_AI_CREATED_AT={record['created_at']}\n"
+    )
+
+
+def test_sync_claude_leaves_an_existing_instance_file_alone(env):
+    env.write_token()
+    existing(env)
+    env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert env.runner.find("test -f ~/.config/lima-ai/instance")
+    assert instance_file_pushes(env) == []
+
+
+def test_sync_claude_writes_a_missing_instance_file_from_the_record(env):
+    env.write_token()
+    existing(env)
+    env.runner.on("test -f ~/.config/lima-ai/instance", returncode=1)
+    (state_dir() / "instances").mkdir(parents=True)
+    (state_dir() / f"instances/{INSTANCE}.json").write_text(
+        json.dumps(
+            {"project": "preludian/myapp", "slug": "myapp", "workspace": "feat-a", "created_at": "2026-11-01T14:03:22Z"}
+        )
+    )
+    env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    pushes = instance_file_pushes(env)
+    assert len(pushes) == 1
+    assert "LIMA_AI_CREATED_AT=2026-11-01T14:03:22Z\n" in pushes[0].input
+
+
+def test_sync_claude_writes_unknown_created_at_when_the_record_predates_it(env):
+    env.write_token()
+    existing(env)
+    env.runner.on("test -f ~/.config/lima-ai/instance", returncode=1)
+    env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    pushes = instance_file_pushes(env)
+    assert len(pushes) == 1
+    assert "LIMA_AI_CREATED_AT=unknown\n" in pushes[0].input
+    assert "LIMA_AI_PROJECT=preludian/myapp\n" in pushes[0].input
+
+
 def test_new_creates_backups_dir(env):
     env.write_token()
     base_then_clone(env)

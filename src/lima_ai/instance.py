@@ -12,7 +12,7 @@ from lima_ai.errors import LimaAiError
 from lima_ai.gitconfig import find_private_keys, push_git_config
 from lima_ai.limactl import Instance, Limactl, gib
 from lima_ai.naming import BASE_INSTANCE, project_dir, resolve
-from lima_ai.render import guest_script, render_env, rsync_excludes
+from lima_ai.render import guest_script, render_env, render_instance_file, rsync_excludes
 from lima_ai.runner import Runner
 from lima_ai.sync import progress_flags, project_argv
 
@@ -111,9 +111,24 @@ def push_token(ws: Workspace, token: str) -> None:
 
 
 def push_info_script(ws: Workspace) -> None:
-    """Install lima-ai-info (prints the VM's FQDN) into the guest's ~/.local/bin."""
+    """Install lima-ai-info (prints the VM's connection card) into the guest's ~/.local/bin."""
     script = "mkdir -p ~/.local/bin && cat > ~/.local/bin/lima-ai-info && chmod 755 ~/.local/bin/lima-ai-info"
     ws.shell(["bash", "-c", script], input=guest_script("lima-ai-info"), step="guest tools")
+
+
+def push_instance_file(ws: Workspace, created_at: str) -> None:
+    """Write ~/.config/lima-ai/instance (mode 600) in the guest; lima-ai-info reads it."""
+    script = "umask 077 && mkdir -p ~/.config/lima-ai && cat > ~/.config/lima-ai/instance"
+    content = render_instance_file(ws.names.project, ws.names.workspace, ws.names.workdir, created_at)
+    ws.shell(["bash", "-c", script], input=content, step="guest tools")
+
+
+def ensure_instance_file(ws: Workspace) -> None:
+    """For VMs made before the instance file existed: write one from the host record, or with unknown time."""
+    probe = ws.shell(["bash", "-c", "test -f ~/.config/lima-ai/instance"], check=False, step="guest tools")
+    if probe.returncode != 0:
+        info = lookup(ws.name) or {}
+        push_instance_file(ws, info.get("created_at", "unknown"))
 
 
 def ssh_keys_wanted(ws: Workspace) -> bool:
@@ -242,6 +257,7 @@ def new(
         push_claude_and_git(ws, instance, ssh_keys)
         note("==> Guest tools")
         push_info_script(ws)
+        push_instance_file(ws, created_at)
         note("==> Project")
         sync_project(ws, instance, ask=False)
         if branch:
@@ -275,6 +291,7 @@ def sync_claude(ws: Workspace) -> None:
     push_claude_and_git(ws, instance, ssh_keys)
     note("==> Guest tools")
     push_info_script(ws)
+    ensure_instance_file(ws)
 
 
 def open_shell(ws: Workspace) -> int:
