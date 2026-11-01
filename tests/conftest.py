@@ -26,6 +26,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{stubs}:{os.environ['PATH']}")
     developer = tmp_path / "Developer"
     (developer / "preludian/myapp").mkdir(parents=True)
+    (developer / "preludian/myapp/.git").mkdir()
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
     (home / ".claude/CLAUDE.md").write_text("# rules\n")
@@ -43,8 +44,8 @@ class Env:
         self.runner.on("rsync --version", "openrsync: protocol version 29\n")
         self.runner.on("ip -4 -o addr show lima0", "3: lima0    inet 192.168.64.8/24 metric 100 brd 192.168.64.255\n")
 
-    def invoke(self, args: list[str], input: str | None = None):
-        app = App(runner=self.runner, config=self.cfg, home=self.home)
+    def invoke(self, args: list[str], input: str | None = None, interactive: bool = False):
+        app = App(runner=self.runner, config=self.cfg, home=self.home, interactive=interactive)
         return CliRunner().invoke(cli, args, input=input, obj=app)
 
     def write_token(self, token: str = "sk-ant-oat01-secret") -> None:

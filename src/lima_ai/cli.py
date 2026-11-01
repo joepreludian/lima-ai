@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from lima_ai import __version__, auth, backup, base, doctor, instance
+from lima_ai import __version__, auth, backup, base, doctor, instance, wizard
 from lima_ai.config import Config, load_config
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
@@ -25,7 +25,7 @@ class LimaAiGroup(click.Group):
 
 
 class App:
-    """What every command needs; tests pass their own runner and config."""
+    """What every command needs; tests pass their own runner, config and interactivity."""
 
     def __init__(
         self,
@@ -33,11 +33,20 @@ class App:
         runner: Runner | None = None,
         config: Config | None = None,
         home: Path | None = None,
+        interactive: bool | None = None,
     ):
         self.verbose = verbose
         self._runner = runner
         self._config = config
         self.home = home or Path.home()
+        self._interactive = interactive
+
+    @property
+    def interactive(self) -> bool:
+        """Whether prompts may run: stdin is a terminal, unless a test says otherwise."""
+        if self._interactive is None:
+            self._interactive = sys.stdin.isatty()
+        return self._interactive
 
     @property
     def config(self) -> Config:
@@ -115,8 +124,11 @@ def workspace_command(name: str | None = None, **settings):
     return decorate
 
 
-@workspace_command()
-@click.option("--branch", help="Create and switch to this branch in the VM's working copy.")
+@cli.command()
+@click.argument("project", required=False)
+@click.argument("workspace", required=False)
+@click.option("--branch", help="Git branch to create or switch to in the VM (default: the workspace name).")
+@click.option("--no-branch", is_flag=True, help="Stay on the branch the host has checked out.")
 @click.option(
     "--restore", "restore_from", metavar="BACKUP", help="Restore this backup (under backups_dir) into the VM."
 )
@@ -124,12 +136,13 @@ def workspace_command(name: str | None = None, **settings):
 @click.option("--memory", help="Memory in GiB, e.g. 16GiB (default: dev-base's).")
 @click.option("--disk", help="Disk size in GiB, e.g. 100GiB (default: dev-base's).")
 @pass_app
-def new(app: App, project: str, workspace: str, branch, restore_from, cpus, memory, disk) -> None:
-    """Create a workspace VM for PROJECT (a folder under developer_dir) and WORKSPACE."""
-    app.require("rsync")
-    ws = app.workspace(project, workspace)
+def new(app: App, project, workspace, branch, no_branch, restore_from, cpus, memory, disk) -> None:
+    """Create a workspace VM for PROJECT (a folder under developer_dir); asks for what is missing."""
+    app.require("rsync", "limactl")
+    request = wizard.fill(app.config, app.runner, app.interactive, project, workspace, branch, no_branch)
+    ws = app.workspace(request.project, request.workspace)
     after_project = backup.restore_step(ws, restore_from) if restore_from else None
-    instance.new(ws, branch=branch, cpus=cpus, memory=memory, disk=disk, after_project=after_project)
+    instance.new(ws, branch=request.branch, cpus=cpus, memory=memory, disk=disk, after_project=after_project)
 
 
 @workspace_command()
