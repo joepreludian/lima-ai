@@ -14,9 +14,9 @@ over, run `lima-ai rm … --force`.
 `limactl stop dev-base`.
 
 **A `.local` name does not resolve.** Check that the VM is running
-(`lima-ai ls`), then ask macOS directly:
-`dscacheutil -q host -a name lima-dev-myapp-feat-login.local`. The IP in the
-`ls` output works as well.
+(`lima-ai list`), then ask macOS directly:
+`dscacheutil -q host -a name lima-dev-myapp-feat-login.local`. The IP that
+`lima-ai new` printed works as well.
 
 **`git push` fails with "Permission denied (publickey)".** Load your key on
 the Mac (`ssh-add -l` should list it), then open a new `lima-ai shell`.

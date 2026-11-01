@@ -76,13 +76,13 @@ compose` listen on every interface, so they are reachable. A server you start by
 
 ```bash
 lima-ai new preludian/myapp feat-billing --branch feat/billing
-lima-ai ls
+lima-ai list
 ```
 
 ```
-PROJECT  FEAT          STATUS   MDNS                               IP            URL
-myapp    feat-billing  Running  lima-dev-myapp-feat-billing.local  192.168.64.9  http://lima-dev-myapp-feat-billing.local:8002
-myapp    feat-login    Running  lima-dev-myapp-feat-login.local    192.168.64.8  http://lima-dev-myapp-feat-login.local:8002
+PROJECT          FEAT          STATUS   BRANCH        FQDN
+preludian/myapp  feat-billing  Running  feat/billing  lima-dev-myapp-feat-billing.local
+preludian/myapp  feat-login    Running  feat/login    lima-dev-myapp-feat-login.local
 ```
 
 Both apps can now run on the same port, each at its own address.

@@ -37,7 +37,7 @@ Files lima-ai keeps on your Mac:
 | `~/.config/lima-ai/oauth-token` | Claude token (mode 600) |
 | `~/.config/lima-ai/config.toml` | optional settings |
 | `~/.local/state/lima-ai/base/` | the rendered `dev-base` template and its provision scripts |
-| `~/.local/state/lima-ai/instances/` | which project and feature each VM belongs to, for `ls` |
+| `~/.local/state/lima-ai/instances/` | which project and feature each VM belongs to, for `list` |
 | `~/Developer/backups/docker/` | Docker backups |
 
 `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are respected when set.

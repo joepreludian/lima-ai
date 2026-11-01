@@ -1,5 +1,6 @@
 import json
 import re
+from functools import partial
 from pathlib import Path
 
 import click
@@ -319,21 +320,26 @@ def remove(feature: Feature, yes: bool, force: bool) -> None:
     click.echo(f"Deleted {feature.name}.")
 
 
-def list_vms(runner: Runner, port: int) -> None:
+def list_vms(runner: Runner) -> None:
     lima = Limactl(runner)
     rows = []
     for instance in lima.list():
         if not instance.name.startswith("dev-") or instance.name == BASE_INSTANCE:
             continue
-        info = lookup(instance.name) or {"slug": "?", "feat": instance.name.removeprefix("dev-")}
-        mdns = f"lima-{instance.name}.local"
-        ip = guest_ip(lima, instance.name) if instance.running else None
-        url = f"http://{mdns}:{port}" if instance.running else "-"
-        rows.append([info["slug"], info["feat"], instance.status, mdns, ip or "-", url])
+        info = lookup(instance.name)
+        project = info["project"] if info else "?"
+        feat = info["feat"] if info else instance.name.removeprefix("dev-")
+        branch = "-"
+        if instance.running and info:
+            workdir = f"{lima.home(instance.name)}/work/{info['slug']}"
+            position = _git_position(partial(lima.shell, instance.name), workdir)
+            if position:
+                branch = position[0]
+        rows.append([project, feat, instance.status, branch, f"lima-{instance.name}.local"])
     if not rows:
         click.echo("no feature VMs; create one with `lima-ai new <project> <feat>`")
         return
-    table = [["PROJECT", "FEAT", "STATUS", "MDNS", "IP", "URL"], *rows]
+    table = [["PROJECT", "FEAT", "STATUS", "BRANCH", "FQDN"], *rows]
     widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
     for row in table:
         click.echo("  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip())

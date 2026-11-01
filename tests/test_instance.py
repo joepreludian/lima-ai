@@ -393,39 +393,56 @@ def test_commands_work_after_host_project_folder_is_gone(env):
     assert "no VM named dev-deleted-feat-a" in result.output
 
 
-# --- ls ---------------------------------------------------------------------------
+# --- list ---------------------------------------------------------------------------
 
 
-def test_ls_lists_feature_vms_but_not_base(env):
+def three_vms(env):
     env.runner.on(
         "limactl list --json",
         lima_list(
             ("dev-base", "Stopped"), (INSTANCE, "Running"), ("dev-other-thing-b", "Stopped"), ("default", "Running")
         ),
     )
+    env.runner.on(f"limactl shell {INSTANCE} git -C {WORKDIR} rev-parse HEAD", "0123456789abcdef\n")
+    env.runner.on(f"limactl shell {INSTANCE} git -C {WORKDIR} symbolic-ref -q --short HEAD", "feat-a-work\n")
     (state_dir() / "instances").mkdir(parents=True)
     (state_dir() / f"instances/{INSTANCE}.json").write_text(
         json.dumps({"project": "preludian/myapp", "slug": "myapp", "feat": "feat-a"})
     )
-    result = env.invoke(["ls", "--port", "3000"])
+
+
+def test_list_shows_project_feat_status_branch_and_fqdn(env):
+    three_vms(env)
+    result = env.invoke(["list"])
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0].split() == ["PROJECT", "FEAT", "STATUS", "MDNS", "IP", "URL"]
-    assert lines[1].split() == [
-        "myapp",
-        "feat-a",
-        "Running",
-        f"lima-{INSTANCE}.local",
-        "192.168.64.8",
-        f"http://lima-{INSTANCE}.local:3000",
-    ]
-    assert lines[2].split() == ["?", "other-thing-b", "Stopped", "lima-dev-other-thing-b.local", "-", "-"]
+    assert lines[0].split() == ["PROJECT", "FEAT", "STATUS", "BRANCH", "FQDN"]
+    assert lines[1].split() == ["preludian/myapp", "feat-a", "Running", "feat-a-work", f"lima-{INSTANCE}.local"]
+    assert lines[2].split() == ["?", "other-thing-b", "Stopped", "-", "lima-dev-other-thing-b.local"]
     assert len(lines) == 3
 
 
-def test_ls_with_no_vms(env):
+def test_list_does_not_shell_into_stopped_vms(env):
+    three_vms(env)
+    env.invoke(["list"])
+    assert not env.runner.find("limactl shell dev-other-thing-b")
+
+
+def test_list_shows_no_branch_when_the_workdir_is_not_a_repository(env):
+    three_vms(env)
+    env.runner.on(f"limactl shell {INSTANCE} git -C {WORKDIR} rev-parse HEAD", "", returncode=128)
+    result = env.invoke(["list"])
+    assert result.output.splitlines()[1].split()[3] == "-"
+
+
+def test_ls_is_an_alias_for_list(env):
+    three_vms(env)
+    assert env.invoke(["ls"]).output == env.invoke(["list"]).output
+
+
+def test_list_with_no_vms(env):
     env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped")))
-    result = env.invoke(["ls"])
+    result = env.invoke(["list"])
     assert result.exit_code == 0
     assert "no feature VMs" in result.output
 
