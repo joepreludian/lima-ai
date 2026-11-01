@@ -120,14 +120,27 @@ def test_new_passes_resource_overrides_to_clone(env):
     assert f"limactl clone --tty=false dev-base {INSTANCE} --cpus 2 --memory 4 --disk 80" in env.runner.commands
 
 
-def test_new_prints_summary_with_mdns_and_ip_but_no_url(env):
+def test_new_prints_the_card_from_the_vm_and_how_to_open_it(env):
     env.write_token()
     base_then_clone(env)
     result = env.invoke(["new", "preludian/myapp", "feat-a"])
-    assert f"lima-{INSTANCE}.local" in result.output
-    assert "192.168.64.8" in result.output
-    assert "http://" not in result.output
-    assert "lima-ai shell preludian/myapp feat-a" in result.output
+    assert result.exit_code == 0, result.output
+    assert env.runner.find(f"limactl shell {INSTANCE} bash -c 'exec ~/.local/bin/lima-ai-info'")
+    assert "| LIMA-AI - Instance Details |" in result.output
+    assert "Open it with: lima-ai shell preludian/myapp feat-a" in result.output
+    assert "192.168.64.8" not in result.output  # the host no longer formats connection details
+    assert "mDNS" not in result.output
+
+
+def test_new_card_failure_keeps_the_vm_and_points_at_sync_claude(env):
+    env.write_token()
+    base_then_clone(env)
+    env.runner.on("exec ~/.local/bin/lima-ai-info", returncode=1, stderr="bash: lima-ai-info: No such file")
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 1
+    assert "error [info]" in result.output
+    assert f"{INSTANCE} is kept" in result.output
+    assert "lima-ai sync-claude preludian/myapp feat-a" in result.output
 
 
 def info_script_pushes(env):

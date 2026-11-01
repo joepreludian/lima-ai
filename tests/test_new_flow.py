@@ -150,3 +150,56 @@ def test_new_probes_the_branch_before_switching(env):
     cmds = env.runner.commands
     probe = cmds.index(f"limactl shell {INSTANCE} git -C {WORKDIR} rev-parse --verify --quiet refs/heads/feat-a")
     assert probe < cmds.index(f"limactl shell {INSTANCE} git -C {WORKDIR} switch -c feat-a")
+
+
+def shell_opens(env):
+    return [
+        c
+        for c in env.runner.calls
+        if c.interactive and c.command.startswith(f"limactl shell --workdir {WORKDIR} {INSTANCE}")
+    ]
+
+
+def test_new_offers_a_shell_and_opens_it_on_yes(env):
+    ready(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-branch"], input="y\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "Open a shell in it now? [Y/n]:" in result.output
+    assert len(shell_opens(env)) == 1
+    assert result.output.index("Open it with:") < result.output.index("Open a shell in it now?")
+
+
+def test_new_shell_offer_defaults_to_yes(env):
+    ready(env)
+    env.invoke(["new", "preludian/myapp", "feat-a", "--no-branch"], input="\n", interactive=True)
+    assert len(shell_opens(env)) == 1
+
+
+def test_new_does_not_open_a_shell_on_no(env):
+    ready(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-branch"], input="n\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert shell_opens(env) == []
+
+
+def test_new_exits_with_the_shells_status(env):
+    ready(env)
+    env.runner.on(f"limactl shell --workdir {WORKDIR} {INSTANCE}", returncode=3)
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-branch"], input="y\n", interactive=True)
+    assert result.exit_code == 3
+
+
+def test_new_does_not_offer_a_shell_outside_a_terminal(env):
+    ready(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert "Open a shell" not in result.output
+    assert shell_opens(env) == []
+
+
+def test_new_does_not_offer_a_shell_after_a_failure(env):
+    ready(env)
+    env.runner.on("--exclude-from=", returncode=23, stderr="rsync error")
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-branch"], input="y\n", interactive=True)
+    assert result.exit_code == 1
+    assert "Open a shell" not in result.output
+    assert shell_opens(env) == []

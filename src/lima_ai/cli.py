@@ -143,6 +143,8 @@ def new(app: App, project, workspace, branch, no_branch, restore_from, cpus, mem
     ws = app.workspace(request.project, request.workspace)
     after_project = backup.restore_step(ws, restore_from) if restore_from else None
     instance.new(ws, branch=request.branch, cpus=cpus, memory=memory, disk=disk, after_project=after_project)
+    if app.interactive and click.confirm("Open a shell in it now?", default=True, err=True):
+        sys.exit(instance.open_shell(ws))
 
 
 @workspace_command()

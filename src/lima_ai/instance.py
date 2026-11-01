@@ -1,5 +1,4 @@
 import json
-import re
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -196,12 +195,6 @@ def switch_branch(ws: Workspace, branch: str) -> None:
     ws.shell([*git, "switch", *create, branch], step="branch")
 
 
-def guest_ip(lima: Limactl, name: str) -> str | None:
-    result = lima.shell(name, ["ip", "-4", "-o", "addr", "show", "lima0"], check=False, step="ip")
-    match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)/", result.stdout or "")
-    return match[1] if match else None
-
-
 # --- commands
 
 
@@ -255,6 +248,7 @@ def new(
             switch_branch(ws, branch)
         if after_project:
             after_project()
+        card = ws.shell(["bash", "-c", "exec ~/.local/bin/lima-ai-info"], step="info").stdout
     except LimaAiError as err:
         raise LimaAiError(
             err.step,
@@ -264,10 +258,8 @@ def new(
             err.stderr_tail,
         ) from None
 
-    click.echo(f"\n{ws.name} is ready.")
-    click.echo(f"  mDNS   {ws.names.mdns}")
-    click.echo(f"  IP     {guest_ip(lima, ws.name) or 'unknown'}")
-    click.echo(f"  Shell  {ws.hint('shell')}")
+    click.echo("\n" + card.rstrip("\n"))
+    click.echo(f"Open it with: {ws.hint('shell')}")
 
 
 def sync(ws: Workspace) -> None:
@@ -285,9 +277,10 @@ def sync_claude(ws: Workspace) -> None:
     push_info_script(ws)
 
 
-def open_shell(ws: Workspace) -> None:
+def open_shell(ws: Workspace) -> int:
     ws.running_instance()
-    ws.lima.shell(ws.name, [], workdir=ws.workdir, interactive=True, check=False)
+    result = ws.lima.shell(ws.name, [], workdir=ws.workdir, interactive=True, check=False)
+    return result.returncode
 
 
 def start(ws: Workspace) -> None:
