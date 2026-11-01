@@ -1,7 +1,7 @@
 [project]
 name = "lima-ai"
-version = "0.4.1"
-description = "Disposable Lima VMs for running Claude Code agents in parallel, one feature per VM"
+version = "0.5.0"
+description = "Disposable Lima VMs for running Claude Code agents in parallel, one workspace per VM"
 readme = "README.md"
 authors = [
     { name = "Jon Trigueiro", email = "joepreludian@gmail.com" }
