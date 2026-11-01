@@ -220,6 +220,6 @@ def test_full_backup_round_trip(lab):
 
 
 def test_rm_deletes_the_vm(lab):
-    lab.cli("rm", OTHER_PROJECT, "d", "--force")
+    lab.cli("destroy", OTHER_PROJECT, "d", "--force")
     listed = subprocess.run(["limactl", "list", "--json"], env=lab.env, capture_output=True, text=True)
     assert f"dev-{OTHER_PROJECT}-d" not in listed.stdout

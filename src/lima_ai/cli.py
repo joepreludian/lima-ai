@@ -173,7 +173,7 @@ def stop(app: App, project: str, feat: str) -> None:
 @click.option("--yes", is_flag=True, help="Skip the first confirmation.")
 @click.option("--force", is_flag=True, help="Skip every confirmation, including the one about unsaved work.")
 @pass_app
-def rm(app: App, project: str, feat: str, yes: bool, force: bool) -> None:
+def destroy(app: App, project: str, feat: str, yes: bool, force: bool) -> None:
     """Delete a feature VM, after checking it for uncommitted or unpushed work."""
     instance.remove(app.feature(project, feat), yes=yes, force=force)
 

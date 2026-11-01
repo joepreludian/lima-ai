@@ -12,7 +12,7 @@
 | `sync <project> <feat>` | Copy the host project into the VM again |
 | `sync-claude <project> <feat>` | Copy the Claude token, Claude config, git config and (if enabled) SSH keys again |
 | `start <project> <feat>` / `stop <project> <feat>` | Start or stop a feature VM |
-| `rm <project> <feat> [--yes] [--force]` | Delete a feature VM after checking for unsaved work |
+| `destroy <project> <feat> [--yes] [--force]` | Delete a feature VM after checking for unsaved work |
 | `backup <project> <feat> [--full] [--no-images] [--no-external] [--compose-file FILE]...` | Back up the project's Docker data to the backups folder |
 | `restore <project> <feat> <backup> [--overwrite] [--full] [--compose-file FILE]...` | Restore a backup into the VM |
 

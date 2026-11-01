@@ -227,7 +227,7 @@ def test_new_failure_after_clone_keeps_vm_and_suggests_next_steps(env):
     assert "error [sync]" in result.output
     assert f"{INSTANCE} is kept" in result.output
     assert "lima-ai sync preludian/myapp feat-a" in result.output
-    assert "lima-ai rm preludian/myapp feat-a" in result.output
+    assert "lima-ai destroy preludian/myapp feat-a" in result.output
     assert not env.runner.find("limactl delete")
 
 
@@ -453,14 +453,14 @@ def test_list_with_no_vms(env):
 def test_rm_clean_running_vm_with_yes_deletes_without_asking(env):
     existing(env)
     env.runner.on("@{u}..", "")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"])
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"])
     assert result.exit_code == 0, result.output
     assert f"limactl delete -f {INSTANCE}" in env.runner.commands
 
 
 def test_rm_asks_once_without_yes(env):
     existing(env)
-    result = env.invoke(["rm", "preludian/myapp", "feat-a"], input="n\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a"], input="n\n")
     assert result.exit_code == 1
     assert not env.runner.find("limactl delete")
 
@@ -468,11 +468,11 @@ def test_rm_asks_once_without_yes(env):
 def test_rm_dirty_vm_asks_second_confirmation_even_with_yes(env):
     existing(env)
     env.runner.on("status --porcelain", "?? notes.txt\n")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"], input="n\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"], input="n\n")
     assert result.exit_code == 1
     assert "notes.txt" in result.output
     assert not env.runner.find("limactl delete")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"], input="y\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"], input="y\n")
     assert result.exit_code == 0
     assert env.runner.find("limactl delete")
 
@@ -481,7 +481,7 @@ def test_rm_unpushed_commits_without_upstream_checks_all_local_commits(env):
     existing(env)
     env.runner.on("@{u}..", returncode=128, stderr="fatal: no upstream configured")
     env.runner.on("log --oneline HEAD --not --remotes", "abc123 wip: login form\n")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"], input="n\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"], input="n\n")
     assert result.exit_code == 1
     assert "abc123 wip: login form" in result.output
     assert not env.runner.find("limactl delete")
@@ -490,14 +490,14 @@ def test_rm_unpushed_commits_without_upstream_checks_all_local_commits(env):
 def test_rm_force_skips_both_confirmations(env):
     existing(env)
     env.runner.on("status --porcelain", " M app.py\n")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--force"])
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--force"])
     assert result.exit_code == 0, result.output
     assert env.runner.find("limactl delete")
 
 
 def test_rm_stopped_vm_cannot_check_work_and_asks_once(env):
     existing(env, status="Stopped")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a"], input="y\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a"], input="y\n")
     assert result.exit_code == 0
     assert "stopped" in result.output
     assert not env.runner.find("status --porcelain")
@@ -507,7 +507,7 @@ def test_rm_stopped_vm_cannot_check_work_and_asks_once(env):
 def test_rm_missing_workdir_is_not_unsaved_work(env):
     existing(env)
     env.runner.on(f"test -d {WORKDIR}", returncode=1)
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"])
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"])
     assert result.exit_code == 0, result.output
     assert env.runner.find("limactl delete")
 
@@ -517,7 +517,7 @@ def test_rm_forgets_instance_record(env):
     (state_dir() / "instances").mkdir(parents=True)
     record = state_dir() / f"instances/{INSTANCE}.json"
     record.write_text("{}")
-    env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"])
+    env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"])
     assert not record.exists()
 
 

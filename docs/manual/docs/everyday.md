@@ -69,7 +69,7 @@ Docker daemon instead of one project.
   `.pub` files. `~/.ssh/config` is never copied, so a key with a
   non-standard name is only used when the forwarded agent holds it or you
   add a `config` entry in the VM yourself. The VM disk under `~/.lima` is
-  not encrypted; `lima-ai rm` deletes it along with the keys.
+  not encrypted; `lima-ai destroy` deletes it along with the keys.
 - **The project**, including `.git/` and `.env*` files. Left out:
   `node_modules/`, `target/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`,
   `build/`, `.next/`, `.nuxt/`, `.turbo/`, `.cache/` and `.DS_Store`.

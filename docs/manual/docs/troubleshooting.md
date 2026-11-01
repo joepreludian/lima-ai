@@ -8,7 +8,7 @@ that fixes it.
 **`new` failed halfway.** The VM is kept, and the error names the step that
 failed. Fix the cause, then run `lima-ai sync …` if the project copy failed,
 or `lima-ai sync-claude …` for the token, Claude or git steps. To start
-over, run `lima-ai rm … --force`.
+over, run `lima-ai destroy … --force`.
 
 **"dev-base is running".** Clones are made from a stopped base. Stop it with
 `limactl stop dev-base`.

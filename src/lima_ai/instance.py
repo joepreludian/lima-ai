@@ -207,7 +207,7 @@ def new(
         raise LimaAiError(
             "preflight",
             f"{feature.name} already exists; open it with `{feature.hint('shell')}` "
-            f"or remove it with `{feature.hint('rm')}`",
+            f"or remove it with `{feature.hint('destroy')}`",
         )
     for size in (memory, disk):
         if size is not None:
@@ -239,7 +239,7 @@ def new(
             err.step,
             f"{err.message}\n{feature.name} is kept. Retry with `{feature.hint('sync')}` (project) or "
             f"`{feature.hint('sync-claude')}` (token, Claude and git config), "
-            f"or discard it with `{feature.hint('rm')}`.",
+            f"or discard it with `{feature.hint('destroy')}`.",
             err.stderr_tail,
         ) from None
 
@@ -282,19 +282,19 @@ def stop(feature: Feature) -> None:
 def unsaved_work(feature: Feature) -> list[str]:
     """Uncommitted changes and unpushed commits in the guest working copy, as report lines."""
     workdir = feature.workdir
-    if feature.shell(["test", "-d", workdir], check=False, step="rm").returncode != 0:
+    if feature.shell(["test", "-d", workdir], check=False, step="destroy").returncode != 0:
         return []
     git = ["git", "-C", workdir]
-    status = feature.shell([*git, "status", "--porcelain"], check=False, step="rm")
+    status = feature.shell([*git, "status", "--porcelain"], check=False, step="destroy")
     if status.returncode != 0:
         reason = (status.stderr or "").strip().splitlines()[-1:] or ["git failed"]
         return [f"Could not check {workdir} for unsaved work: {reason[0]}"]
     lines = []
     if status.stdout.strip():
         lines += ["Uncommitted changes:", *status.stdout.rstrip().splitlines()]
-    log = feature.shell([*git, "log", "--oneline", "@{u}.."], check=False, step="rm")
+    log = feature.shell([*git, "log", "--oneline", "@{u}.."], check=False, step="destroy")
     if log.returncode != 0:  # no upstream: every commit that is on no remote
-        log = feature.shell([*git, "log", "--oneline", "HEAD", "--not", "--remotes"], check=False, step="rm")
+        log = feature.shell([*git, "log", "--oneline", "HEAD", "--not", "--remotes"], check=False, step="destroy")
     commits = log.stdout.splitlines() if log.returncode == 0 else []
     if commits:
         lines += ["Commits not pushed:", *commits[:MAX_LISTED_COMMITS]]

@@ -101,11 +101,11 @@ Then open a pull request, or fetch the branch into your host checkout.
 ### 8. Clean up
 
 ```bash
-lima-ai rm preludian/myapp feat-login
+lima-ai destroy preludian/myapp feat-login
 ```
 
 !!! note
-    `rm` looks for uncommitted changes and unpushed commits in the VM before
+    `destroy` looks for uncommitted changes and unpushed commits in the VM before
     deleting it. If it finds any, it lists them and asks a second time;
     `--yes` skips only the first question, and `--force` skips both.
 
