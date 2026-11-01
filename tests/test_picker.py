@@ -1,3 +1,5 @@
+import os
+
 import click
 import pytest
 
@@ -44,6 +46,27 @@ def test_candidates_do_not_descend_into_a_repository(tmp_path):
     tree(dev, "repo/.git", "repo/packages/web")
     cfg = Config(developer_dir=dev, backups_dir=tmp_path / "b")
     assert candidates(cfg) == [("repo", True)]
+
+
+def test_candidates_offer_a_symlinked_project_without_descending_into_it(tmp_path):
+    dev = tmp_path / "Developer"
+    tree(dev, "preludian", tmp_path / "elsewhere/linked/.git", tmp_path / "elsewhere/linked/packages/web")
+    (dev / "preludian/linked").symlink_to(tmp_path / "elsewhere/linked")
+    (dev / "preludian/broken").symlink_to(tmp_path / "gone")
+    cfg = Config(developer_dir=dev, backups_dir=tmp_path / "b")
+    assert candidates(cfg) == [("preludian", False), ("preludian/linked", True)]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read every folder")
+def test_candidates_skip_an_unreadable_folder(tmp_path):
+    dev = tmp_path / "Developer"
+    tree(dev, "locked/secret", "open/app/.git")
+    (dev / "locked").chmod(0o000)
+    try:
+        cfg = Config(developer_dir=dev, backups_dir=tmp_path / "b")
+        assert candidates(cfg) == [("locked", False), ("open", False), ("open/app", True)]
+    finally:
+        (dev / "locked").chmod(0o755)
 
 
 def test_candidates_fail_clearly_when_developer_dir_is_missing(tmp_path):

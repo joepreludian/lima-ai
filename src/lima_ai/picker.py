@@ -23,15 +23,20 @@ def candidates(cfg: Config) -> list[tuple[str, bool]]:
     found: list[tuple[str, bool]] = []
 
     def walk(folder: Path, depth: int) -> None:
-        for entry in sorted(os.scandir(folder), key=lambda e: e.name):
-            if not entry.is_dir(follow_symlinks=False) or entry.name.startswith(".") or entry.name in skip:
+        try:
+            entries = sorted(os.scandir(folder), key=lambda e: e.name)
+        except (PermissionError, FileNotFoundError):  # unreadable or vanished: nothing to offer below it
+            return
+        for entry in entries:
+            if not entry.is_dir() or entry.name.startswith(".") or entry.name in skip:
                 continue
             sub = Path(entry.path)
             if sub == cfg.backups_dir or cfg.backups_dir in sub.parents:
                 continue
             is_git = (sub / ".git").exists()
             found.append((sub.relative_to(root).as_posix(), is_git))
-            if not is_git and depth < MAX_DEPTH:
+            # A symlinked folder is offered (check_project accepts it) but not walked: it may point anywhere.
+            if not is_git and not entry.is_symlink() and depth < MAX_DEPTH:
                 walk(sub, depth + 1)
 
     walk(root, 1)
