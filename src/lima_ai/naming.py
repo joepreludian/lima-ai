@@ -31,9 +31,6 @@ class Names:
         """Guest working copy, relative to the guest home."""
         return f"work/{self.slug}"
 
-    def url(self, port: int) -> str:
-        return f"http://{self.mdns}:{port}"
-
 
 def sanitize(value: str) -> str:
     value = re.sub(r"[^a-z0-9-]", "-", value.lower())

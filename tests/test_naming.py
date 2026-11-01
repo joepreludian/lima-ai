@@ -34,7 +34,6 @@ def test_resolve_builds_every_name():
     assert names.hostname == "lima-dev-myapp-feat-a"
     assert names.mdns == "lima-dev-myapp-feat-a.local"
     assert names.workdir == "work/myapp"
-    assert names.url(8002) == "http://lima-dev-myapp-feat-a.local:8002"
 
 
 def test_nested_project_uses_last_component_for_slug():

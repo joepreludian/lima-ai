@@ -49,7 +49,6 @@ creates the `feat/login` branch. It ends with a summary:
 dev-myapp-feat-login is ready.
   mDNS   lima-dev-myapp-feat-login.local
   IP     192.168.64.8
-  URL    http://lima-dev-myapp-feat-login.local:8002
   Shell  lima-ai shell preludian/myapp feat-login
 ```
 
@@ -66,8 +65,9 @@ docker compose up -d     # your app, on the VM's own address
 cc                       # claude --dangerously-skip-permissions
 ```
 
-Open `http://lima-dev-myapp-feat-login.local:8002` in your Mac's browser.
-Ports published by `docker compose` listen on every interface, so they are
+If the app listens on port 8002, open
+`http://lima-dev-myapp-feat-login.local:8002` in your Mac's browser. Ports
+published by `docker compose` listen on every interface, so they are
 reachable. A server you start by hand must bind `0.0.0.0` rather than
 `127.0.0.1` to be reachable from the Mac.
 
@@ -84,7 +84,7 @@ myapp    feat-billing  Running  lima-dev-myapp-feat-billing.local  192.168.64.9 
 myapp    feat-login    Running  lima-dev-myapp-feat-login.local    192.168.64.8  http://lima-dev-myapp-feat-login.local:8002
 ```
 
-Both apps now run on port 8002, each at its own address.
+Both apps can now run on the same port, each at its own address.
 
 ### 7. Ship the work
 

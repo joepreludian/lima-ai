@@ -213,12 +213,12 @@ def restore_command(app: App, project: str, feat: str, backup_path, overwrite, f
 
 
 @cli.command("ls")
-@click.option("--port", type=int, help="Port for the URL column (default: app_port).")
+@click.option("--port", type=int, default=8002, show_default=True, help="Port for the URL column.")
 @pass_app
 def ls(app: App, port: int | None) -> None:
     """List feature VMs with their mDNS name, IP and app URL."""
     app.require("limactl")
-    instance.list_vms(app.runner, port or app.config.app_port)
+    instance.list_vms(app.runner, port)
 
 
 @cli.command("doctor")

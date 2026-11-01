@@ -37,7 +37,6 @@ class SyncConfig:
 class Config:
     developer_dir: Path = Path("~/Developer")
     backups_dir: Path = Path("~/Developer/backups/docker")
-    app_port: int = 8002
     vm: VmConfig = field(default_factory=VmConfig)
     versions: Versions = field(default_factory=Versions)
     sync: SyncConfig = field(default_factory=SyncConfig)

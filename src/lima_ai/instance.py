@@ -234,11 +234,9 @@ def new(
             err.stderr_tail,
         ) from None
 
-    names = feature.names
     click.echo(f"\n{feature.name} is ready.")
-    click.echo(f"  mDNS   {names.mdns}")
+    click.echo(f"  mDNS   {feature.names.mdns}")
     click.echo(f"  IP     {guest_ip(lima, feature.name) or 'unknown'}")
-    click.echo(f"  URL    {names.url(cfg.app_port)}")
     click.echo(f"  Shell  {feature.hint('shell')}")
 
 

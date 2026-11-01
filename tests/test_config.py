@@ -17,7 +17,6 @@ def test_missing_file_gives_defaults(tmp_path):
     home = Path.home()
     assert cfg.developer_dir == home / "Developer"
     assert cfg.backups_dir == home / "Developer/backups/docker"
-    assert cfg.app_port == 8002
     assert (cfg.vm.cpus, cfg.vm.memory, cfg.vm.disk, cfg.vm.ubuntu_release) == (4, "8GiB", "60GiB", "26.04")
     assert cfg.versions.node_major == 24
     assert cfg.versions.rtk == "0.49.0"
@@ -33,7 +32,7 @@ def test_toml_overrides_top_level_and_sections(tmp_path):
         write(
             tmp_path,
             """
-app_port = 3000
+backups_dir = "/tmp/bk"
 [vm]
 cpus = 8
 memory = "16GiB"
@@ -42,7 +41,7 @@ extra_excludes = ["*.sqlite", "tmp/"]
 """,
         )
     )
-    assert cfg.app_port == 3000
+    assert cfg.backups_dir == Path("/tmp/bk")
     assert cfg.vm.cpus == 8
     assert cfg.vm.memory == "16GiB"
     assert cfg.vm.disk == "60GiB"
@@ -59,6 +58,7 @@ def test_paths_expand_tilde(tmp_path):
     "text, key",
     [
         ("colour = 1\n", "colour"),
+        ("app_port = 8002\n", "app_port"),
         ("[vm]\ngpus = 1\n", "vm.gpus"),
         ("[network]\nx = 1\n", "network"),
     ],
@@ -73,7 +73,7 @@ def test_unknown_keys_are_an_error(tmp_path, text, key):
 @pytest.mark.parametrize(
     "text",
     [
-        'app_port = "8002"\n',
+        '[versions]\nnode_major = "24"\n',
         "[vm]\ncpus = true\n",
         "[vm]\nmemory = 8\n",
         '[sync]\nextra_excludes = "x"\n',
@@ -115,8 +115,8 @@ def test_config_and_state_dirs_follow_xdg(monkeypatch, tmp_path):
 def test_default_config_path_is_in_config_dir(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     (tmp_path / "lima-ai").mkdir()
-    (tmp_path / "lima-ai/config.toml").write_text("app_port = 9000\n")
-    assert load_config().app_port == 9000
+    (tmp_path / "lima-ai/config.toml").write_text("[vm]\ncpus = 9\n")
+    assert load_config().vm.cpus == 9
 
 
 def test_config_is_a_frozen_value():
@@ -140,9 +140,10 @@ def test_save_ssh_keys_creates_the_file(tmp_path):
 
 
 def test_save_ssh_keys_appends_a_sync_table(tmp_path):
-    path = write(tmp_path, "# my settings\napp_port = 3000\n\n[vm]\ncpus = 8\n")
+    original = '# my settings\nbackups_dir = "/tmp/bk"\n\n[vm]\ncpus = 8\n'
+    path = write(tmp_path, original)
     save_ssh_keys(False, path)
-    assert path.read_text() == "# my settings\napp_port = 3000\n\n[vm]\ncpus = 8\n\n[sync]\nssh_keys = false\n"
+    assert path.read_text() == original + "\n[sync]\nssh_keys = false\n"
     assert load_config(path).sync.ssh_keys is False
 
 

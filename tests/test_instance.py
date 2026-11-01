@@ -118,13 +118,13 @@ def test_new_passes_resource_overrides_to_clone(env):
     assert f"limactl clone --tty=false dev-base {INSTANCE} --cpus 2 --memory 4 --disk 80" in env.runner.commands
 
 
-def test_new_prints_summary_with_mdns_ip_and_url(env):
+def test_new_prints_summary_with_mdns_and_ip_but_no_url(env):
     env.write_token()
     base_then_clone(env)
     result = env.invoke(["new", "preludian/myapp", "feat-a"])
     assert f"lima-{INSTANCE}.local" in result.output
     assert "192.168.64.8" in result.output
-    assert f"http://lima-{INSTANCE}.local:8002" in result.output
+    assert "http://" not in result.output
     assert "lima-ai shell preludian/myapp feat-a" in result.output
 
 

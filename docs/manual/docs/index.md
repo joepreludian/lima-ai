@@ -4,8 +4,8 @@ Run several Claude Code agents in parallel on a Mac, each in its own
 disposable Linux VM, each working on one feature of your project.
 
 ```
-lima-ai new preludian/myapp feat-login     →  http://lima-dev-myapp-feat-login.local:8002
-lima-ai new preludian/myapp feat-billing   →  http://lima-dev-myapp-feat-billing.local:8002
+lima-ai new preludian/myapp feat-login     →  lima-dev-myapp-feat-login.local
+lima-ai new preludian/myapp feat-billing   →  lima-dev-myapp-feat-billing.local
 ```
 
 Every VM gets its own copy of the project, its own Docker daemon and its own
@@ -41,7 +41,7 @@ sequenceDiagram
     opt --branch or --restore
         CLI->>VM: git switch -c, docker-backup restore
     end
-    CLI-->>You: mDNS name, IP, URL and shell command
+    CLI-->>You: mDNS name, IP and shell command
 ```
 
 ### Every VM has its own address
@@ -49,7 +49,8 @@ sequenceDiagram
 Each VM sits on a `vzNAT` network with its own IP and publishes
 `lima-<instance>.local` over mDNS (avahi), which your Mac resolves with no
 setup. Lima's usual forwarding of guest ports to your Mac's `localhost` is
-switched off entirely, so every VM can serve on port 8002 without a clash:
+switched off entirely, so every VM can serve on the same port (say, 8002)
+without a clash:
 
 ```mermaid
 flowchart LR

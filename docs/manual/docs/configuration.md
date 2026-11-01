@@ -7,7 +7,6 @@ go unnoticed.
 ```toml
 developer_dir = "~/Developer"                 # where <project> paths start
 backups_dir   = "~/Developer/backups/docker"  # mounted read-write in every VM
-app_port      = 8002                          # used for the URLs lima-ai prints
 
 [vm]                                          # dev-base defaults; new --cpus/--memory/--disk override per VM
 cpus   = 4

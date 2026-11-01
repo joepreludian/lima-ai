@@ -4,8 +4,8 @@ Run several Claude Code agents in parallel on a Mac, each in its own
 disposable Linux VM, each working on one feature of your project.
 
 ```
-lima-ai new preludian/myapp feat-login     →  http://lima-dev-myapp-feat-login.local:8002
-lima-ai new preludian/myapp feat-billing   →  http://lima-dev-myapp-feat-billing.local:8002
+lima-ai new preludian/myapp feat-login     →  lima-dev-myapp-feat-login.local
+lima-ai new preludian/myapp feat-billing   →  lima-dev-myapp-feat-billing.local
 ```
 
 Every VM gets its own copy of the project, its own Docker daemon and its own
