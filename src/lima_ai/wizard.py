@@ -1,5 +1,6 @@
 """The interactive side of `lima-ai new`: filling in what the command line left out."""
 
+import shutil
 from dataclasses import dataclass
 
 import click
@@ -7,6 +8,7 @@ import click
 from lima_ai.config import Config
 from lima_ai.errors import LimaAiError
 from lima_ai.naming import check_project, resolve
+from lima_ai.picker import pick_with_fzf
 from lima_ai.runner import Runner
 
 
@@ -58,7 +60,9 @@ def fill(
 
 
 def choose_project(cfg: Config, runner: Runner) -> str:
-    """Ask for the project folder until the answer names a folder under developer_dir."""
+    """Pick the project with fzf when it is installed, otherwise ask for the folder until it exists."""
+    if shutil.which("fzf"):
+        return check_project(cfg.developer_dir, pick_with_fzf(cfg, runner))
     note("tip: install fzf (brew install fzf) to pick the project from a list")
     while True:
         answer = click.prompt(f"Project folder (relative to {cfg.developer_dir})", err=True)

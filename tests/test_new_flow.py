@@ -203,3 +203,45 @@ def test_new_does_not_offer_a_shell_after_a_failure(env):
     assert result.exit_code == 1
     assert "Open a shell" not in result.output
     assert shell_opens(env) == []
+
+
+def with_fzf(env):
+    fzf = env.tmp_path / "bin/fzf"
+    fzf.write_text("#!/bin/sh\necho 'stub: not for running' >&2\nexit 99\n")
+    fzf.chmod(0o755)
+
+
+def test_new_picks_the_project_with_fzf_when_installed(env):
+    with_fzf(env)
+    ready(env)
+    (env.cfg.developer_dir / "opensource/other").mkdir(parents=True)
+    env.runner.on("fzf --prompt", "preludian/myapp  (git)\n")
+    result = env.invoke(["new"], input="feat-a\n\n" + NO_SHELL, interactive=True)
+    assert result.exit_code == 0, result.output
+    fzf = env.runner.find("fzf --prompt")
+    assert len(fzf) == 1
+    assert fzf[0].argv == ["fzf", "--prompt", "Project> ", "--height", "40%", "--reverse", "--no-multi"]
+    assert fzf[0].input == "opensource\nopensource/other\npreludian\npreludian/myapp  (git)\n"
+    assert "tip: install fzf" not in result.output
+    assert "Project folder" not in result.output
+    assert env.runner.find(f"limactl clone --tty=false dev-base {INSTANCE}")
+
+
+def test_new_aborts_when_fzf_is_cancelled(env):
+    with_fzf(env)
+    ready(env)
+    env.runner.on("fzf --prompt", returncode=130)
+    result = env.invoke(["new"], input="feat-a\n", interactive=True)
+    assert result.exit_code == 1
+    assert "Aborted" in result.output
+    assert not env.runner.find("limactl clone")
+    assert "Workspace name" not in result.output
+
+
+def test_new_aborts_when_fzf_finds_no_match(env):
+    with_fzf(env)
+    ready(env)
+    env.runner.on("fzf --prompt", returncode=1, stdout="")
+    result = env.invoke(["new"], input="feat-a\n", interactive=True)
+    assert result.exit_code == 1
+    assert not env.runner.find("limactl clone")
