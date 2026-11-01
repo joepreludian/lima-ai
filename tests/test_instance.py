@@ -4,8 +4,9 @@ import json
 import re
 import tempfile
 
+from lima_ai import instance, wizard
 from lima_ai.config import SyncConfig, config_dir, state_dir
-from tests.conftest import GUEST_HOME
+from tests.conftest import CARD, GUEST_HOME
 from tests.fakes import lima_list
 
 INSTANCE = "dev-myapp-feat-a"
@@ -126,10 +127,33 @@ def test_new_prints_the_card_from_the_vm_and_how_to_open_it(env):
     result = env.invoke(["new", "preludian/myapp", "feat-a"])
     assert result.exit_code == 0, result.output
     assert env.runner.find(f"limactl shell {INSTANCE} bash -c 'exec ~/.local/bin/lima-ai-info'")
-    assert "| LIMA-AI - Instance Details |" in result.output
-    assert "Open it with: lima-ai shell preludian/myapp feat-a" in result.output
-    assert "192.168.64.8" not in result.output  # the host no longer formats connection details
+    # The card is printed as the VM produced it; the host adds nothing about the VM around it.
+    assert result.stdout == CARD + "Open it with: lima-ai shell preludian/myapp feat-a\n"
     assert "mDNS" not in result.output
+
+
+def test_hints_quote_a_project_path_with_spaces(env):
+    ws = instance.Workspace(env.cfg, env.runner, env.home, "preludian/my app", "feat-a")
+    assert ws.hint("shell") == "lima-ai shell 'preludian/my app' feat-a"
+
+
+def test_new_takes_created_at_before_asking_anything(env, monkeypatch):
+    env.write_token()
+    base_then_clone(env)
+    clock = ["2026-11-01T14:00:00Z"]
+    monkeypatch.setattr(instance, "utc_now", lambda: clock[0])
+    ask_branch = wizard.ask_branch
+
+    def slow_answer(workspace):  # the user spends time at the prompt
+        clock[0] = "2026-11-01T14:05:00Z"
+        return ask_branch(workspace)
+
+    monkeypatch.setattr(wizard, "ask_branch", slow_answer)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
+    assert record["created_at"] == "2026-11-01T14:00:00Z"
+    assert "LIMA_AI_CREATED_AT=2026-11-01T14:00:00Z\n" in instance_file_pushes(env)[0].input
 
 
 def test_new_card_failure_keeps_the_vm_and_points_at_sync_claude(env):

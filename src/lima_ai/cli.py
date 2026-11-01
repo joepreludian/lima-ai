@@ -139,10 +139,19 @@ def workspace_command(name: str | None = None, **settings):
 def new(app: App, project, workspace, branch, no_branch, restore_from, cpus, memory, disk) -> None:
     """Create a workspace VM for PROJECT (a folder under developer_dir); asks for what is missing."""
     app.require("rsync", "limactl")
+    created_at = instance.utc_now()  # when the user started, not when they finished answering the prompts
     request = wizard.fill(app.config, app.runner, app.interactive, project, workspace, branch, no_branch)
     ws = app.workspace(request.project, request.workspace)
     after_project = backup.restore_step(ws, restore_from) if restore_from else None
-    instance.new(ws, branch=request.branch, cpus=cpus, memory=memory, disk=disk, after_project=after_project)
+    instance.new(
+        ws,
+        branch=request.branch,
+        cpus=cpus,
+        memory=memory,
+        disk=disk,
+        after_project=after_project,
+        created_at=created_at,
+    )
     if app.interactive and click.confirm("Open a shell in it now?", default=True, err=True):
         sys.exit(instance.open_shell(ws))
 

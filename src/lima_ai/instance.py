@@ -1,4 +1,5 @@
 import json
+import shlex
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -39,7 +40,8 @@ class Workspace:
         return self.names.instance
 
     def hint(self, command: str) -> str:
-        return f"lima-ai {command} {self.names.project} {self.names.workspace}"
+        """A command line the user can paste, so a project path with spaces is quoted."""
+        return shlex.join(["lima-ai", command, self.names.project, self.names.workspace])
 
     def instance(self) -> Instance:
         instance = self.lima.get(self.name)
@@ -220,9 +222,13 @@ def new(
     memory: str | None = None,
     disk: str | None = None,
     after_project=None,
+    created_at: str | None = None,
 ) -> None:
-    """Clone dev-base into a workspace VM and fill it. `after_project` runs last (restore)."""
-    created_at = utc_now()
+    """Clone dev-base into a workspace VM and fill it. `after_project` runs last (restore).
+
+    `created_at` is when the user started `new` (the CLI takes it before its prompts); it defaults to now.
+    """
+    created_at = created_at or utc_now()
     cfg, lima = ws.cfg, ws.lima
     token = auth.read_token()
     existing = {instance.name: instance for instance in lima.list()}
@@ -274,7 +280,7 @@ def new(
             err.stderr_tail,
         ) from None
 
-    click.echo("\n" + card.rstrip("\n"))
+    click.echo(card, nl=False)  # as the VM printed it: the host adds nothing to the connection details
     click.echo(f"Open it with: {ws.hint('shell')}")
 
 

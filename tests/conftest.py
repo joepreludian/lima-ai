@@ -9,6 +9,15 @@ from lima_ai.config import Config
 from tests.fakes import FakeRunner
 
 GUEST_HOME = "/home/jon.linux"
+# What the fake VM answers to lima-ai-info: the host must print it untouched.
+CARD = (
+    "+-----------------------------+\n"
+    "| LIMA-AI - Instance Details  |\n"
+    "+-----------------------------+\n"
+    "| Project:    preludian/myapp |\n"
+    "| IP:         192.168.64.8    |\n"
+    "+-----------------------------+\n"
+)
 
 
 @pytest.fixture
@@ -43,11 +52,7 @@ class Env:
         self.runner.on("printenv HOME", GUEST_HOME + "\n")
         self.runner.on("rsync --version", "openrsync: protocol version 29\n")
         self.runner.on("rev-parse --verify --quiet refs/heads/", returncode=1)
-        self.runner.on(
-            "exec ~/.local/bin/lima-ai-info",
-            "+----------------------------+\n| LIMA-AI - Instance Details |\n+----------------------------+\n"
-            "| Project:    preludian/myapp |\n+----------------------------+\n",
-        )
+        self.runner.on("exec ~/.local/bin/lima-ai-info", CARD)
 
     def invoke(self, args: list[str], input: str | None = None, interactive: bool = False):
         app = App(runner=self.runner, config=self.cfg, home=self.home, interactive=interactive)
