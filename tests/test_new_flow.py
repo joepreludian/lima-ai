@@ -135,3 +135,18 @@ def test_new_asks_the_project_again_after_a_bad_answer(env, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "does not exist or is not a directory" in result.output
     assert result.output.count("Project folder") == 2
+
+
+def test_new_switches_to_a_branch_that_already_exists_instead_of_creating_it(env):
+    ready(env)
+    env.runner.on("rev-parse --verify --quiet refs/heads/feat/login", returncode=0)
+    env.invoke(["new", "preludian/myapp", "feat-a", "--branch", "feat/login"])
+    assert switch_commands(env) == [f"limactl shell {INSTANCE} git -C {WORKDIR} switch feat/login"]
+
+
+def test_new_probes_the_branch_before_switching(env):
+    ready(env)
+    env.invoke(["new", "preludian/myapp", "feat-a"])
+    cmds = env.runner.commands
+    probe = cmds.index(f"limactl shell {INSTANCE} git -C {WORKDIR} rev-parse --verify --quiet refs/heads/feat-a")
+    assert probe < cmds.index(f"limactl shell {INSTANCE} git -C {WORKDIR} switch -c feat-a")

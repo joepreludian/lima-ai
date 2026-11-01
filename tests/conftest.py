@@ -42,6 +42,7 @@ class Env:
         self.runner = FakeRunner()
         self.runner.on("printenv HOME", GUEST_HOME + "\n")
         self.runner.on("rsync --version", "openrsync: protocol version 29\n")
+        self.runner.on("rev-parse --verify --quiet refs/heads/", returncode=1)
         self.runner.on("ip -4 -o addr show lima0", "3: lima0    inet 192.168.64.8/24 metric 100 brd 192.168.64.255\n")
 
     def invoke(self, args: list[str], input: str | None = None, interactive: bool = False):

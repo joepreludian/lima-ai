@@ -182,6 +182,14 @@ def sync_project(ws: Workspace, instance: Instance, ask: bool) -> None:
     ws.runner.run(argv, interactive=True, step="sync")
 
 
+def switch_branch(ws: Workspace, branch: str) -> None:
+    """Switch the guest working copy to branch, creating it when it does not exist yet."""
+    git = ["git", "-C", ws.workdir]
+    probe = ws.shell([*git, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], check=False, step="branch")
+    create = [] if probe.returncode == 0 else ["-c"]
+    ws.shell([*git, "switch", *create, branch], step="branch")
+
+
 def guest_ip(lima: Limactl, name: str) -> str | None:
     result = lima.shell(name, ["ip", "-4", "-o", "addr", "show", "lima0"], check=False, step="ip")
     match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)/", result.stdout or "")
@@ -237,7 +245,7 @@ def new(
         note("==> Project")
         sync_project(ws, instance, ask=False)
         if branch:
-            ws.shell(["git", "-C", ws.workdir, "switch", "-c", branch], step="branch")
+            switch_branch(ws, branch)
         if after_project:
             after_project()
     except LimaAiError as err:
