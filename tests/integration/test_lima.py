@@ -160,10 +160,15 @@ def test_base_is_built_verified_and_sealed(lab):
 
 def test_two_clones_serve_their_own_content_on_the_same_port(lab):
     for workspace in ("a", "b"):
-        output = lab.cli("new", PROJECT, workspace)
-        assert "LIMA-AI - Instance Details" in output
-        assert "Open it with: lima-ai shell" in output
         instance = f"dev-{PROJECT}-{workspace}"
+        # The fixture has no git, so --no-branch changes nothing in the VM; it exercises the flag's path.
+        output = lab.cli("new", PROJECT, workspace, "--no-branch")
+        assert "LIMA-AI - Instance Details" in output
+        assert f"| Project:    {PROJECT}" in output
+        assert f"| Workspace:  {workspace}" in output
+        assert f"| FQDN:       lima-{instance}.local" in output
+        assert "| Git branch: no git repository" in output
+        assert f"Open it with: lima-ai shell {PROJECT} {workspace}" in output
         lab.compose(
             instance,
             PROJECT,
