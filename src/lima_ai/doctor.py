@@ -41,6 +41,7 @@ def run_checks(runner: Runner, system: str | None = None, machine: str | None = 
         check_limactl(runner),
         check_tool("rsync"),
         check_tool("claude"),
+        check_optional_tool("fzf", "brew install fzf"),
         check_ssh_agent(runner),
         check_config(),
         check_token(),
@@ -67,6 +68,14 @@ def check_tool(tool: str) -> Check:
     if shutil.which(tool):
         return Check(tool, "ok")
     return Check(tool, "fail", "not found on PATH", TOOL_HINTS[tool])
+
+
+def check_optional_tool(tool: str, install: str) -> Check:
+    """A nice-to-have: missing is reported as skipped, never as a problem."""
+    name = f"{tool} (optional)"
+    if shutil.which(tool):
+        return Check(name, "ok")
+    return Check(name, "skip", f"not installed ({install})")
 
 
 def check_limactl(runner: Runner) -> Check:

@@ -9,7 +9,7 @@ from lima_ai.auth import write_token
 from lima_ai.cli import App, cli
 from tests.fakes import FakeRunner
 
-TOOLS = ("limactl", "rsync", "claude", "ssh-add", "docker-backup")
+TOOLS = ("limactl", "rsync", "claude", "ssh-add", "docker-backup", "fzf")
 
 
 @pytest.fixture
@@ -179,3 +179,15 @@ def test_doctor_command_exits_1_on_failure(host, monkeypatch):
     result = run_doctor(host)
     assert result.exit_code == 1
     assert "1 problem" in result.output
+
+
+def test_missing_fzf_is_skipped_not_a_problem(host):
+    host.remove("fzf")
+    checks = host.checks()
+    assert checks["fzf (optional)"].status == "skip"
+    assert "brew install fzf" in checks["fzf (optional)"].detail
+    assert "All checks passed." in doctor.render(list(checks.values()))
+
+
+def test_present_fzf_is_ok(host):
+    assert host.checks()["fzf (optional)"].status == "ok"
