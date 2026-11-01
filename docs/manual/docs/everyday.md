@@ -59,7 +59,17 @@ Docker daemon instead of one project.
   mergetool entries, the `osxkeychain` credential helper, and signing
   programs installed only on the Mac. When a signing program is removed,
   commit signing is turned off in the VM. Your global ignore file and
-  `~/.ssh/known_hosts` are copied too; SSH keys are not.
+  `~/.ssh/known_hosts` are copied too.
+- **SSH private keys**, only if you say so. The first time `new` or
+  `sync-claude` finds private keys in `~/.ssh`, it lists them and asks
+  whether to copy them into the VM (default: no). The answer is saved as
+  `ssh_keys` under `[sync]` in `config.toml`, so you are asked once; edit
+  the file to change it. Keys are recognised by their content, not their
+  name, and land in the VM's `~/.ssh` with mode 600 together with their
+  `.pub` files. `~/.ssh/config` is never copied, so a key with a
+  non-standard name is only used when the forwarded agent holds it or you
+  add a `config` entry in the VM yourself. The VM disk under `~/.lima` is
+  not encrypted; `lima-ai rm` deletes it along with the keys.
 - **The project**, including `.git/` and `.env*` files. Left out:
   `node_modules/`, `target/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`,
   `build/`, `.next/`, `.nuxt/`, `.turbo/`, `.cache/` and `.DS_Store`.

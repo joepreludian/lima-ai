@@ -24,6 +24,7 @@ docker_backup_sha256 = "9c7bdf7c25d4f8c19253a3ffd73bfd34e2d8d4f6e1cd7736b27feffb
 
 [sync]
 extra_excludes = ["*.sqlite3"]                # added to the project rsync excludes
+ssh_keys = false                              # copy ~/.ssh private keys into VMs; unset = ask once and save the answer
 ```
 
 Mounts, VM defaults and tool versions are fixed when `dev-base` is built.

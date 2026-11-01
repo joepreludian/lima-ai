@@ -10,7 +10,7 @@
 | `shell <project> <feat>` | Open a shell in the VM's working copy, with your SSH agent forwarded |
 | `ls [--port N]` | List feature VMs with status, mDNS name, IP and URL |
 | `sync <project> <feat>` | Copy the host project into the VM again |
-| `sync-claude <project> <feat>` | Copy the Claude token, Claude config and git config again |
+| `sync-claude <project> <feat>` | Copy the Claude token, Claude config, git config and (if enabled) SSH keys again |
 | `start <project> <feat>` / `stop <project> <feat>` | Start or stop a feature VM |
 | `rm <project> <feat> [--yes] [--force]` | Delete a feature VM after checking for unsaved work |
 | `backup <project> <feat> [--full] [--no-images] [--no-external] [--compose-file FILE]...` | Back up the project's Docker data to the backups folder |

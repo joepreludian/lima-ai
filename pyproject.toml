@@ -1,6 +1,6 @@
 [project]
 name = "lima-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Disposable Lima VMs for running Claude Code agents in parallel, one feature per VM"
 readme = "README.md"
 authors = [

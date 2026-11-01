@@ -6,9 +6,9 @@ import click
 
 from lima_ai import auth
 from lima_ai.claude_config import push_claude_config
-from lima_ai.config import Config, state_dir
+from lima_ai.config import Config, save_ssh_keys, state_dir
 from lima_ai.errors import LimaAiError
-from lima_ai.gitconfig import push_git_config
+from lima_ai.gitconfig import find_private_keys, push_git_config
 from lima_ai.limactl import Instance, Limactl, gib
 from lima_ai.naming import BASE_INSTANCE, project_dir, resolve
 from lima_ai.render import render_env, rsync_excludes
@@ -98,11 +98,26 @@ def push_token(feature: Feature, token: str) -> None:
     feature.shell(["bash", "-c", script], input=render_env(token), step="token")
 
 
-def push_claude_and_git(feature: Feature, instance: Instance) -> None:
+def ssh_keys_wanted(feature: Feature) -> bool:
+    """Whether ~/.ssh private keys go into the VM: the config.toml answer, or ask once and save it."""
+    setting = feature.cfg.sync.ssh_keys
+    if setting is not None:
+        return setting
+    keys = find_private_keys(feature.host_home)
+    if not keys:
+        return False
+    names = ", ".join(key.name for key in keys)
+    answer = click.confirm(f"Copy these SSH private keys into the VM? {names}", default=False, err=True)
+    path = save_ssh_keys(answer)
+    note(f"Saved ssh_keys = {str(answer).lower()} under [sync] in {path}; edit it to change your mind.")
+    return answer
+
+
+def push_claude_and_git(feature: Feature, instance: Instance, ssh_keys: bool) -> None:
     note("==> Claude config")
     push_claude_config(feature.runner, instance, feature.guest_home, feature.cfg.developer_dir, feature.host_home)
-    note("==> Git config")
-    push_git_config(feature.runner, instance, feature.host_home)
+    note("==> Git config" + (" and SSH keys" if ssh_keys else ""))
+    push_git_config(feature.runner, instance, feature.host_home, ssh_keys=ssh_keys)
 
 
 def _git_position(run, repo: str) -> tuple[str, str] | None:
@@ -193,6 +208,7 @@ def new(
     cfg.backups_dir.mkdir(parents=True, exist_ok=True)
     if feature.runner.run(["ssh-add", "-l"], check=False, step="preflight").returncode != 0:
         note("warning: ssh-agent has no key loaded; git over SSH will not work in the VM (ssh-add)")
+    ssh_keys = ssh_keys_wanted(feature)
 
     note(f"==> Cloning {BASE_INSTANCE} into {feature.name}")
     lima.clone(BASE_INSTANCE, feature.name, cpus=cpus, memory=memory, disk=disk)
@@ -202,7 +218,7 @@ def new(
         instance = feature.running_instance()
         note("==> Claude token")
         push_token(feature, token)
-        push_claude_and_git(feature, instance)
+        push_claude_and_git(feature, instance, ssh_keys)
         note("==> Project")
         sync_project(feature, instance, ask=False)
         if branch:
@@ -233,9 +249,10 @@ def sync(feature: Feature) -> None:
 def sync_claude(feature: Feature) -> None:
     token = auth.read_token()
     instance = feature.running_instance()
+    ssh_keys = ssh_keys_wanted(feature)
     note("==> Claude token")
     push_token(feature, token)
-    push_claude_and_git(feature, instance)
+    push_claude_and_git(feature, instance, ssh_keys)
 
 
 def open_shell(feature: Feature) -> None:

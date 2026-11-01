@@ -1,6 +1,9 @@
+import contextlib
+import dataclasses
 import json
+import tempfile
 
-from lima_ai.config import state_dir
+from lima_ai.config import SyncConfig, config_dir, state_dir
 from tests.conftest import GUEST_HOME
 from tests.fakes import lima_list
 
@@ -20,6 +23,49 @@ def existing(env, status="Running"):
 
 def index_of(commands, prefix):
     return next(i for i, c in enumerate(commands) if c.startswith(prefix))
+
+
+OPENSSH_KEY = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----\n"
+
+
+def with_ssh_keys(env, *names):
+    ssh = env.home / ".ssh"
+    ssh.mkdir()
+    (ssh / "known_hosts").write_text("github.com ssh-ed25519 AAAA\n")
+    (ssh / "config").write_text("Host github.com\n")
+    for name in names:
+        (ssh / name).write_text(OPENSSH_KEY)
+
+
+def keep_git_staging(env, monkeypatch):
+    """Make the git staging dir outlive the push so tests can look inside it."""
+    staging = env.tmp_path / "git-staging"
+    real = tempfile.TemporaryDirectory
+
+    @contextlib.contextmanager
+    def fake_tempdir(prefix):
+        if not prefix.startswith("lima-ai-git-"):
+            with real(prefix=prefix) as tmp:
+                yield tmp
+            return
+        staging.mkdir()
+        yield str(staging)
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", fake_tempdir)
+    return staging
+
+
+def staged_ssh_names(staging):
+    ssh = staging / ".ssh"
+    return sorted(p.name for p in ssh.iterdir()) if ssh.exists() else []
+
+
+def set_ssh_keys(env, value):
+    env.cfg = dataclasses.replace(env.cfg, sync=SyncConfig(ssh_keys=value))
+
+
+def saved_config():
+    return (config_dir() / "config.toml").read_text()
 
 
 # --- new -------------------------------------------------------------------
@@ -212,6 +258,91 @@ def test_sync_claude_pushes_token_claude_and_git(env):
     assert [c for c in env.runner.calls if c.input and "CLAUDE_CODE_OAUTH_TOKEN" in c.input]
     assert env.runner.find("--copy-unsafe-links")
     assert not env.runner.find("--exclude-from=")
+
+
+# --- SSH private keys ---------------------------------------------------------------
+
+
+def test_sync_claude_asks_before_copying_keys_and_remembers_yes(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519", "work.key")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert "id_ed25519, work.key" in result.output
+    assert staged_ssh_names(staging) == ["id_ed25519", "known_hosts", "work.key"]
+    assert saved_config() == "[sync]\nssh_keys = true\n"
+    assert str(config_dir() / "config.toml") in result.output
+
+
+def test_sync_claude_remembers_no_and_keeps_keys_out(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"], input="n\n")
+    assert result.exit_code == 0, result.output
+    assert staged_ssh_names(staging) == ["known_hosts"]
+    assert saved_config() == "[sync]\nssh_keys = false\n"
+
+
+def test_sync_claude_default_answer_is_no(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"], input="\n")
+    assert result.exit_code == 0, result.output
+    assert staged_ssh_names(staging) == ["known_hosts"]
+    assert saved_config() == "[sync]\nssh_keys = false\n"
+
+
+def test_sync_claude_follows_a_saved_yes_without_asking(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    set_ssh_keys(env, True)
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[y/N]" not in result.output
+    assert staged_ssh_names(staging) == ["id_ed25519", "known_hosts"]
+    assert not (config_dir() / "config.toml").exists()
+
+
+def test_sync_claude_follows_a_saved_no_without_asking(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    set_ssh_keys(env, False)
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[y/N]" not in result.output
+    assert staged_ssh_names(staging) == ["known_hosts"]
+
+
+def test_sync_claude_does_not_ask_when_there_are_no_keys(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[y/N]" not in result.output
+    assert not (config_dir() / "config.toml").exists()
+
+
+def test_new_asks_about_keys_before_cloning(env, monkeypatch):
+    env.write_token()
+    base_then_clone(env)
+    with_ssh_keys(env, "id_ed25519")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert result.output.index("[y/N]") < result.output.index("Cloning dev-base")
+    assert staged_ssh_names(staging) == ["id_ed25519", "known_hosts"]
+    assert saved_config() == "[sync]\nssh_keys = true\n"
 
 
 def test_shell_opens_interactive_shell_in_workdir(env):

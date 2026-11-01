@@ -4,10 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from lima_ai.gitconfig import stage_git_files
+from lima_ai.gitconfig import find_private_keys, stage_git_files
 from lima_ai.runner import Runner
 
 FIXTURES = Path(__file__).parent / "fixtures"
+OPENSSH_KEY = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----\n"
+RSA_KEY = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----\n"
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 
@@ -25,7 +27,13 @@ def home(tmp_path) -> Path:
     (home / ".gitignore_global").write_text(".DS_Store\n*.swp\n")
     (home / ".ssh").mkdir()
     (home / ".ssh/known_hosts").write_text("github.com ssh-ed25519 AAAA\n")
-    (home / ".ssh/id_ed25519").write_text("PRIVATE KEY")
+    (home / ".ssh/id_ed25519").write_text(OPENSSH_KEY)
+    (home / ".ssh/id_ed25519.pub").write_text("ssh-ed25519 AAAA jon@mac\n")
+    (home / ".ssh/work.key").write_text(RSA_KEY)
+    (home / ".ssh/config").write_text("Host github.com\n    IdentityFile ~/.ssh/work.key\n")
+    (home / ".ssh/notes.txt").write_text("not a key\n")
+    (home / ".ssh/agent").mkdir()
+    (home / ".ssh/agent/socket.key").write_text(OPENSSH_KEY)
     return home
 
 
@@ -72,6 +80,35 @@ def test_known_hosts_copied_private_keys_never(home, tmp_path):
     assert known_hosts.stat().st_mode & 0o777 == 0o600
     assert (staging / ".ssh").stat().st_mode & 0o777 == 0o700
     assert sorted(p.name for p in (staging / ".ssh").iterdir()) == ["known_hosts"]
+
+
+def test_find_private_keys_goes_by_header_not_name(home):
+    assert [p.name for p in find_private_keys(home)] == ["id_ed25519", "work.key"]
+
+
+def test_find_private_keys_without_ssh_dir(tmp_path):
+    assert find_private_keys(tmp_path) == []
+
+
+def test_private_keys_staged_on_request_with_their_public_halves(home, tmp_path):
+    staging = tmp_path / "staging"
+    stage_git_files(Runner(), home, staging, ssh_keys=True)
+    ssh = staging / ".ssh"
+    assert sorted(p.name for p in ssh.iterdir()) == ["id_ed25519", "id_ed25519.pub", "known_hosts", "work.key"]
+    assert (ssh / "id_ed25519").read_text() == OPENSSH_KEY
+    assert (ssh / "id_ed25519").stat().st_mode & 0o777 == 0o600
+    assert (ssh / "work.key").stat().st_mode & 0o777 == 0o600
+    assert (ssh / "id_ed25519.pub").stat().st_mode & 0o777 == 0o644
+    assert ssh.stat().st_mode & 0o777 == 0o700
+
+
+def test_private_keys_staged_even_without_known_hosts(home, tmp_path):
+    (home / ".ssh/known_hosts").unlink()
+    staging = tmp_path / "staging"
+    stage_git_files(Runner(), home, staging, ssh_keys=True)
+    ssh = staging / ".ssh"
+    assert sorted(p.name for p in ssh.iterdir()) == ["id_ed25519", "id_ed25519.pub", "work.key"]
+    assert ssh.stat().st_mode & 0o777 == 0o700
 
 
 def test_host_only_signing_program_is_stripped_with_signing(home, tmp_path):
