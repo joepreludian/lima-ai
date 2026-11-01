@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
@@ -74,11 +75,16 @@ def _record_path(name: str) -> Path:
     return state_dir() / "instances" / f"{name}.json"
 
 
-def record(ws: Workspace) -> None:
+def utc_now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def record(ws: Workspace, created_at: str) -> None:
     path = _record_path(ws.name)
     path.parent.mkdir(parents=True, exist_ok=True)
     names = ws.names
-    path.write_text(json.dumps({"project": names.project, "slug": names.slug, "workspace": names.workspace}) + "\n")
+    data = {"project": names.project, "slug": names.slug, "workspace": names.workspace, "created_at": created_at}
+    path.write_text(json.dumps(data) + "\n")
 
 
 def lookup(name: str) -> dict | None:
@@ -208,6 +214,7 @@ def new(
     after_project=None,
 ) -> None:
     """Clone dev-base into a workspace VM and fill it. `after_project` runs last (restore)."""
+    created_at = utc_now()
     cfg, lima = ws.cfg, ws.lima
     token = auth.read_token()
     existing = {instance.name: instance for instance in lima.list()}
@@ -233,7 +240,7 @@ def new(
 
     note(f"==> Cloning {BASE_INSTANCE} into {ws.name}")
     lima.clone(BASE_INSTANCE, ws.name, cpus=cpus, memory=memory, disk=disk)
-    record(ws)
+    record(ws, created_at)
     try:
         lima.start(ws.name)
         instance = ws.running_instance()

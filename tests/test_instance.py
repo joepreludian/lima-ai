@@ -1,6 +1,7 @@
 import contextlib
 import dataclasses
 import json
+import re
 import tempfile
 
 from lima_ai.config import SyncConfig, config_dir, state_dir
@@ -9,6 +10,7 @@ from tests.fakes import lima_list
 
 INSTANCE = "dev-myapp-feat-a"
 WORKDIR = f"{GUEST_HOME}/work/myapp"
+CREATED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 
 def base_then_clone(env, clone_status="Running"):
@@ -149,7 +151,9 @@ def test_new_records_instance_for_list(env):
     base_then_clone(env)
     env.invoke(["new", "preludian/myapp", "feat-a"])
     record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
-    assert record == {"project": "preludian/myapp", "slug": "myapp", "workspace": "feat-a"}
+    assert record.keys() == {"project", "slug", "workspace", "created_at"}
+    assert (record["project"], record["slug"], record["workspace"]) == ("preludian/myapp", "myapp", "feat-a")
+    assert CREATED_AT.fullmatch(record["created_at"])
 
 
 def test_new_creates_backups_dir(env):
