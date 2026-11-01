@@ -1,5 +1,47 @@
 #!/bin/bash
-# Prints this VM's FQDN: the mDNS name avahi publishes, lima-<instance>.local.
-# lima-ai installs this into ~/.local/bin of every feature VM.
+# Prints this VM's connection card. lima-ai installs it into ~/.local/bin of
+# every workspace VM and runs it at the end of `lima-ai new`; it is the one
+# place that formats these details.
 set -euo pipefail
-echo "$(hostname).local"
+
+file="$HOME/.config/lima-ai/instance"
+if [ ! -f "$file" ]; then
+  echo "lima-ai-info: no instance file; run lima-ai sync-claude from the host" >&2
+  exit 1
+fi
+. "$file"
+
+fqdn="$(hostname).local"
+ip="$( (ip -4 -o addr show lima0 2>/dev/null || true) | sed -nE 's/.*inet ([0-9.]+)\/.*/\1/p' | head -n 1)"
+ip="${ip:-unknown}"
+
+workdir="$HOME/$LIMA_AI_WORKDIR"
+if git -C "$workdir" rev-parse --git-dir >/dev/null 2>&1; then
+  branch="$(git -C "$workdir" symbolic-ref -q --short HEAD || echo '(detached HEAD)')"
+else
+  branch="no git repository"
+fi
+
+title="LIMA-AI - Instance Details"
+rows=(
+  "Project:    $LIMA_AI_PROJECT"
+  "Workspace:  $LIMA_AI_WORKSPACE"
+  "FQDN:       $fqdn"
+  "IP:         $ip"
+  "Created at: $LIMA_AI_CREATED_AT"
+  "Git branch: $branch"
+)
+
+width=${#title}
+for row in "${rows[@]}"; do
+  if [ "${#row}" -gt "$width" ]; then width=${#row}; fi
+done
+edge="+$(printf '%*s' "$((width + 2))" '' | tr ' ' '-')+"
+
+echo "$edge"
+printf '| %-*s |\n' "$width" "$title"
+echo "$edge"
+for row in "${rows[@]}"; do
+  printf '| %-*s |\n' "$width" "$row"
+done
+echo "$edge"

@@ -183,22 +183,6 @@ def test_guest_scripts_are_available(cfg):
         assert step in seal
 
 
-def test_lima_ai_info_prints_the_guest_fqdn(tmp_path):
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    hostname = fake_bin / "hostname"
-    hostname.write_text("#!/bin/sh\necho lima-dev-myapp-feat-a\n")
-    hostname.chmod(0o755)
-    result = subprocess.run(
-        ["bash", "-c", guest_script("lima-ai-info")],
-        env={"PATH": f"{fake_bin}:/usr/bin:/bin"},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == "lima-dev-myapp-feat-a.local\n"
-
-
 def test_rsync_excludes_default_list_plus_extras(tmp_path):
     cfg = Config(sync=SyncConfig(extra_excludes=("*.sqlite",)))
     lines = rsync_excludes(cfg).splitlines()
@@ -248,6 +232,84 @@ def test_instance_file_round_trips_through_bash(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "it's/here|unknown"
+
+
+def info_card(tmp_path, instance_file: bool = True, repo: str = "branch", project: str = "preludian/myapp"):
+    """Run lima-ai-info under a throwaway HOME. repo: 'branch', 'detached' or 'none'."""
+    home = tmp_path / "home"
+    (home / ".config/lima-ai").mkdir(parents=True)
+    if instance_file:
+        (home / ".config/lima-ai/instance").write_text(
+            f"LIMA_AI_PROJECT={project}\nLIMA_AI_WORKSPACE=feat-a\n"
+            "LIMA_AI_WORKDIR=work/myapp\nLIMA_AI_CREATED_AT=2026-11-01T14:03:22Z\n"
+        )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "hostname").write_text("#!/bin/sh\necho lima-dev-myapp-feat-a\n")
+    (fake_bin / "ip").write_text(
+        "#!/bin/sh\necho '3: lima0    inet 192.168.64.8/24 brd 192.168.64.255 scope global lima0'\n"
+    )
+    for stub in ("hostname", "ip"):
+        (fake_bin / stub).chmod(0o755)
+    workdir = home / "work/myapp"
+    workdir.mkdir(parents=True)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-C", str(workdir)]
+    if repo in ("branch", "detached"):
+        subprocess.run([*git, "init", "-q", "-b", "feat-a"], check=True)
+        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "init"], check=True)
+    if repo == "detached":
+        subprocess.run([*git, "checkout", "-q", "--detach"], check=True)
+    return subprocess.run(
+        ["bash", "-c", guest_script("lima-ai-info")],
+        env={"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(home)},
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_lima_ai_info_prints_the_card(tmp_path):
+    result = info_card(tmp_path)
+    assert result.returncode == 0, result.stderr
+    # The longest row is the FQDN one (39 characters), so the box is 43 wide.
+    assert result.stdout == (
+        "+-----------------------------------------+\n"
+        "| LIMA-AI - Instance Details              |\n"
+        "+-----------------------------------------+\n"
+        "| Project:    preludian/myapp             |\n"
+        "| Workspace:  feat-a                      |\n"
+        "| FQDN:       lima-dev-myapp-feat-a.local |\n"
+        "| IP:         192.168.64.8                |\n"
+        "| Created at: 2026-11-01T14:03:22Z        |\n"
+        "| Git branch: feat-a                      |\n"
+        "+-----------------------------------------+\n"
+    )
+
+
+def test_lima_ai_info_widens_the_box_to_the_longest_row(tmp_path):
+    result = info_card(tmp_path, project="clients/a-rather-long-customer-name/their-application")
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert len({len(line) for line in lines}) == 1
+    assert lines[3] == "| Project:    clients/a-rather-long-customer-name/their-application |"
+
+
+def test_lima_ai_info_reports_detached_head(tmp_path):
+    result = info_card(tmp_path, repo="detached")
+    assert result.returncode == 0, result.stderr
+    assert "Git branch: (detached HEAD)" in result.stdout
+
+
+def test_lima_ai_info_reports_a_workdir_without_git(tmp_path):
+    result = info_card(tmp_path, repo="none")
+    assert result.returncode == 0, result.stderr
+    assert "Git branch: no git repository" in result.stdout
+
+
+def test_lima_ai_info_fails_clearly_without_an_instance_file(tmp_path):
+    result = info_card(tmp_path, instance_file=False)
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "no instance file; run lima-ai sync-claude from the host" in result.stderr
 
 
 @pytest.mark.skipif(shutil.which("limactl") is None, reason="limactl not installed")
