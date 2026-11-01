@@ -82,6 +82,14 @@ def render_env(token: str) -> str:
     return _render("guest/lima-ai.env", {"token": token})
 
 
+def render_instance_file(project: str, workspace: str, workdir: str, created_at: str) -> str:
+    """Content of the guest's ~/.config/lima-ai/instance, which lima-ai-info sources."""
+    return _render(
+        "guest/lima-ai-instance",
+        {"project": project, "workspace": workspace, "workdir": workdir, "created_at": created_at},
+    )
+
+
 def rsync_excludes(cfg: Config) -> str:
     lines = _resource("rsync-exclude.txt").read_text().splitlines()
     return "\n".join([*lines, *cfg.sync.extra_excludes]) + "\n"

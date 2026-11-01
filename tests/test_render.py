@@ -11,6 +11,7 @@ from lima_ai.render import (
     guest_script,
     render_base,
     render_env,
+    render_instance_file,
     render_template,
     rsync_excludes,
 )
@@ -223,6 +224,30 @@ def test_rsync_excludes_default_list_plus_extras(tmp_path):
 def test_env_file_exports_quoted_token():
     assert render_env("sk-ant-oat01-abc") == "export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-abc\n"
     assert render_env("a'b c") == "export CLAUDE_CODE_OAUTH_TOKEN='a'\"'\"'b c'\n"
+
+
+def test_instance_file_exports_shell_quoted_values():
+    text = render_instance_file("clients/acme shop", "feat-a", "work/acme-shop", "2026-11-01T14:03:22Z")
+    assert text == (
+        "LIMA_AI_PROJECT='clients/acme shop'\n"
+        "LIMA_AI_WORKSPACE=feat-a\n"
+        "LIMA_AI_WORKDIR=work/acme-shop\n"
+        "LIMA_AI_CREATED_AT=2026-11-01T14:03:22Z\n"
+    )
+
+
+def test_instance_file_round_trips_through_bash(tmp_path):
+    """The file is sourced by lima-ai-info, so quoting must survive a project path with a quote in it."""
+    path = tmp_path / "instance"
+    path.write_text(render_instance_file("it's/here", "feat-a", "work/here", "unknown"))
+    result = subprocess.run(
+        ["bash", "-c", '. "$1" && printf "%s|%s" "$LIMA_AI_PROJECT" "$LIMA_AI_CREATED_AT"', "_", str(path)],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "it's/here|unknown"
 
 
 @pytest.mark.skipif(shutil.which("limactl") is None, reason="limactl not installed")
