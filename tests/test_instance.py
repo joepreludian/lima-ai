@@ -144,12 +144,12 @@ def test_new_installs_the_guest_info_script(env):
     assert "chmod 755" in pushes[0].command
 
 
-def test_new_records_instance_for_ls(env):
+def test_new_records_instance_for_list(env):
     env.write_token()
     base_then_clone(env)
     env.invoke(["new", "preludian/myapp", "feat-a"])
     record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
-    assert record == {"project": "preludian/myapp", "slug": "myapp", "feat": "feat-a"}
+    assert record == {"project": "preludian/myapp", "slug": "myapp", "workspace": "feat-a"}
 
 
 def test_new_creates_backups_dir(env):
@@ -407,19 +407,28 @@ def three_vms(env):
     env.runner.on(f"limactl shell {INSTANCE} git -C {WORKDIR} symbolic-ref -q --short HEAD", "feat-a-work\n")
     (state_dir() / "instances").mkdir(parents=True)
     (state_dir() / f"instances/{INSTANCE}.json").write_text(
-        json.dumps({"project": "preludian/myapp", "slug": "myapp", "feat": "feat-a"})
+        json.dumps({"project": "preludian/myapp", "slug": "myapp", "workspace": "feat-a"})
     )
 
 
-def test_list_shows_project_feat_status_branch_and_fqdn(env):
+def test_list_shows_project_workspace_status_branch_and_fqdn(env):
     three_vms(env)
     result = env.invoke(["list"])
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0].split() == ["PROJECT", "FEAT", "STATUS", "BRANCH", "FQDN"]
+    assert lines[0].split() == ["PROJECT", "WORKSPACE", "STATUS", "BRANCH", "FQDN"]
     assert lines[1].split() == ["preludian/myapp", "feat-a", "Running", "feat-a-work", f"lima-{INSTANCE}.local"]
     assert lines[2].split() == ["?", "other-thing-b", "Stopped", "-", "lima-dev-other-thing-b.local"]
     assert len(lines) == 3
+
+
+def test_list_reads_records_written_before_the_workspace_rename(env):
+    three_vms(env)
+    (state_dir() / f"instances/{INSTANCE}.json").write_text(
+        json.dumps({"project": "preludian/myapp", "slug": "myapp", "feat": "feat-a"})
+    )
+    result = env.invoke(["list"])
+    assert result.output.splitlines()[1].split()[:2] == ["preludian/myapp", "feat-a"]
 
 
 def test_list_does_not_shell_into_stopped_vms(env):
@@ -444,7 +453,8 @@ def test_list_with_no_vms(env):
     env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped")))
     result = env.invoke(["list"])
     assert result.exit_code == 0
-    assert "no feature VMs" in result.output
+    assert "no workspace VMs" in result.output
+    assert "lima-ai new" in result.output
 
 
 # --- rm ---------------------------------------------------------------------------

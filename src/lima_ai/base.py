@@ -9,7 +9,7 @@ from lima_ai.runner import Runner
 
 
 def build(cfg: Config, runner: Runner, rebuild: bool) -> None:
-    """Build, verify and seal the golden dev-base VM that features are cloned from."""
+    """Build, verify and seal the golden dev-base VM that workspaces are cloned from."""
     lima = Limactl(runner)
     template = render_base(cfg, state_dir() / "base")
     if lima.get(BASE_INSTANCE):
@@ -35,4 +35,4 @@ def build(cfg: Config, runner: Runner, rebuild: bool) -> None:
     click.echo("==> Sealing and stopping", err=True)
     lima.shell(BASE_INSTANCE, ["sudo", "bash", "-c", guest_script("seal-base.sh")], step="seal-base")
     lima.stop(BASE_INSTANCE)
-    click.echo(f"{BASE_INSTANCE} is ready. Create a feature VM with: lima-ai new <project> <feat>")
+    click.echo(f"{BASE_INSTANCE} is ready. Create a workspace VM with: lima-ai new")

@@ -10,7 +10,7 @@ import click
 
 from lima_ai.config import Config
 from lima_ai.errors import LimaAiError
-from lima_ai.instance import Feature, note
+from lima_ai.instance import Workspace, note
 
 GUEST_BACKUPS = "/backups/docker"
 
@@ -73,9 +73,9 @@ def compose_files(
     return files
 
 
-def backup_name(slug: str, feat: str, full: bool, now: datetime | None = None) -> str:
+def backup_name(slug: str, workspace: str, full: bool, now: datetime | None = None) -> str:
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
-    return f"{slug}-{feat}-full-{stamp}" if full else f"{slug}-{feat}-{stamp}"
+    return f"{slug}-{workspace}-full-{stamp}" if full else f"{slug}-{workspace}-{stamp}"
 
 
 def backup_argv(files: list[str], dest: str, full: bool, no_images: bool, no_external: bool) -> list[str]:
@@ -160,13 +160,13 @@ def resolve_backup(cfg: Config, arg: str) -> tuple[Path, str]:
     return path, f"{GUEST_BACKUPS}/{relative.as_posix()}"
 
 
-def _guest_listing(feature: Feature) -> tuple[set[str], str | None]:
+def _guest_listing(ws: Workspace) -> tuple[set[str], str | None]:
     """Top-level names in the VM's working copy, and its .env if there is one."""
-    out = feature.shell(["ls", "-1A"], workdir=feature.workdir, step="compose files").stdout
+    out = ws.shell(["ls", "-1A"], workdir=ws.workdir, step="compose files").stdout
     names = set(out.splitlines())
     dotenv = None
     if ".env" in names:
-        dotenv = feature.shell(["cat", ".env"], workdir=feature.workdir, step="compose files").stdout
+        dotenv = ws.shell(["cat", ".env"], workdir=ws.workdir, step="compose files").stdout
     return names, dotenv
 
 
@@ -178,18 +178,18 @@ def _host_listing(root: Path) -> tuple[set[str], str | None]:
     return names, dotenv
 
 
-def run_backup(feature: Feature, full: bool, no_images: bool, no_external: bool, explicit: Sequence[str]) -> None:
+def run_backup(ws: Workspace, full: bool, no_images: bool, no_external: bool, explicit: Sequence[str]) -> None:
     if full and (no_external or explicit):
         raise LimaAiError("backup", "--no-external and --compose-file cannot be combined with --full")
-    feature.running_instance()
-    names, dotenv = _guest_listing(feature)
-    where = f"the VM's ~/{feature.names.workdir}"
+    ws.running_instance()
+    names, dotenv = _guest_listing(ws)
+    where = f"the VM's ~/{ws.names.workdir}"
     files = compose_files(explicit, names, dotenv, required=not full, where=where)
-    name = backup_name(feature.names.slug, feature.names.workspace, full)
+    name = backup_name(ws.names.slug, ws.names.workspace, full)
     dest = f"{GUEST_BACKUPS}/{name}"
 
     def in_vm(argv: list[str], **kwargs):
-        return feature.shell(argv, workdir=feature.workdir, **kwargs)
+        return ws.shell(argv, workdir=ws.workdir, **kwargs)
 
     if files:
         note("==> Stopping the compose stack (volumes are read live)")
@@ -206,22 +206,22 @@ def run_backup(feature: Feature, full: bool, no_images: bool, no_external: bool,
 
     host_files = list(explicit)
     if not host_files:
-        host_names, host_dotenv = _host_listing(feature.cfg.developer_dir / feature.names.project)
+        host_names, host_dotenv = _host_listing(ws.cfg.developer_dir / ws.names.project)
         host_files = detect_compose_files(host_names, host_dotenv) or files
-    click.echo(f"\nBackup written to {feature.cfg.backups_dir / name}")
+    click.echo(f"\nBackup written to {ws.cfg.backups_dir / name}")
     click.echo("To bring it into the host's Colima:")
-    for line in host_commands(feature.cfg, feature.names.project, host_files, bool(explicit), name, full, no_external):
+    for line in host_commands(ws.cfg, ws.names.project, host_files, bool(explicit), name, full, no_external):
         click.echo(f"  {line}")
 
 
-def run_restore(feature: Feature, backup: str, overwrite: bool, full: bool, explicit: Sequence[str]) -> None:
+def run_restore(ws: Workspace, backup: str, overwrite: bool, full: bool, explicit: Sequence[str]) -> None:
     if full and explicit:
         raise LimaAiError("restore", "--compose-file cannot be combined with --full")
-    _, source = resolve_backup(feature.cfg, backup)
-    feature.running_instance()
+    _, source = resolve_backup(ws.cfg, backup)
+    ws.running_instance()
 
     def in_vm(argv: list[str], **kwargs):
-        return feature.shell(argv, workdir=feature.workdir, **kwargs)
+        return ws.shell(argv, workdir=ws.workdir, **kwargs)
 
     info = in_vm(["docker-backup", "info", "--json", source], step="backup info")
     try:
@@ -232,7 +232,7 @@ def run_restore(feature: Feature, backup: str, overwrite: bool, full: bool, expl
         raise LimaAiError(
             "restore",
             f"{backup} is a single-volume archive, which lima-ai does not restore. Restore it by hand: "
-            f"`{feature.hint('shell')}`, then `docker-backup restore-volume {source} [--as NAME]`",
+            f"`{ws.hint('shell')}`, then `docker-backup restore-volume {source} [--as NAME]`",
         )
     in_vm(["docker-backup", "info", source], interactive=True, step="backup info")
 
@@ -243,7 +243,7 @@ def run_restore(feature: Feature, backup: str, overwrite: bool, full: bool, expl
             abort=True,
             err=True,
         )
-    names, dotenv = _guest_listing(feature)
+    names, dotenv = _guest_listing(ws)
     stack = compose_files(explicit, names, dotenv, required=False, where="")
     if stack:
         note("==> Stopping the compose stack")
@@ -278,7 +278,7 @@ def run_restore(feature: Feature, backup: str, overwrite: bool, full: bool, expl
         )
 
 
-def restore_step(feature: Feature, backup: str) -> Callable[[], None]:
+def restore_step(ws: Workspace, backup: str) -> Callable[[], None]:
     """`new --restore`: check the backup path now, restore (never --overwrite) once the VM is ready."""
-    resolve_backup(feature.cfg, backup)
-    return lambda: run_restore(feature, backup, overwrite=False, full=False, explicit=())
+    resolve_backup(ws.cfg, backup)
+    return lambda: run_restore(ws, backup, overwrite=False, full=False, explicit=())
