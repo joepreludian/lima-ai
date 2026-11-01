@@ -234,8 +234,23 @@ def test_instance_file_round_trips_through_bash(tmp_path):
     assert result.stdout == "it's/here|unknown"
 
 
-def info_card(tmp_path, instance_file: bool = True, repo: str = "branch", project: str = "preludian/myapp"):
-    """Run lima-ai-info under a throwaway HOME. repo: 'branch', 'detached' or 'none'."""
+def utf8_locale() -> str:
+    """A UTF-8 locale this host has, so bash counts characters the way a terminal shows them."""
+    known = subprocess.run(["locale", "-a"], capture_output=True, text=True).stdout.split()
+    for name in ("C.UTF-8", "C.utf8", "en_US.UTF-8", "en_US.utf8"):
+        if name in known:
+            return name
+    pytest.skip("no UTF-8 locale installed")
+
+
+def info_card(
+    tmp_path,
+    instance_file: bool = True,
+    repo: str = "branch",
+    project: str = "preludian/myapp",
+    locale: str | None = None,
+):
+    """Run lima-ai-info under a throwaway HOME. repo: 'branch', 'detached', 'none' or 'parent' (HOME is the repo)."""
     home = tmp_path / "home"
     (home / ".config/lima-ai").mkdir(parents=True)
     if instance_file:
@@ -259,12 +274,12 @@ def info_card(tmp_path, instance_file: bool = True, repo: str = "branch", projec
         subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "init"], check=True)
     if repo == "detached":
         subprocess.run([*git, "checkout", "-q", "--detach"], check=True)
-    return subprocess.run(
-        ["bash", "-c", guest_script("lima-ai-info")],
-        env={"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(home)},
-        capture_output=True,
-        text=True,
-    )
+    if repo == "parent":
+        subprocess.run([*git[:-1], str(home), "init", "-q", "-b", "main"], check=True)
+    env = {"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(home)}
+    if locale:
+        env["LC_ALL"] = locale
+    return subprocess.run(["bash", "-c", guest_script("lima-ai-info")], env=env, capture_output=True, text=True)
 
 
 def test_lima_ai_info_prints_the_card(tmp_path):
@@ -293,6 +308,14 @@ def test_lima_ai_info_widens_the_box_to_the_longest_row(tmp_path):
     assert lines[3] == "| Project:    clients/a-rather-long-customer-name/their-application |"
 
 
+def test_lima_ai_info_keeps_the_box_aligned_for_a_non_ascii_project(tmp_path):
+    result = info_card(tmp_path, project="clientes/coração", locale=utf8_locale())
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert len({len(line) for line in lines}) == 1
+    assert lines[3] == "| Project:    clientes/coração            |"
+
+
 def test_lima_ai_info_reports_detached_head(tmp_path):
     result = info_card(tmp_path, repo="detached")
     assert result.returncode == 0, result.stderr
@@ -301,6 +324,12 @@ def test_lima_ai_info_reports_detached_head(tmp_path):
 
 def test_lima_ai_info_reports_a_workdir_without_git(tmp_path):
     result = info_card(tmp_path, repo="none")
+    assert result.returncode == 0, result.stderr
+    assert "Git branch: no git repository" in result.stdout
+
+
+def test_lima_ai_info_ignores_a_repository_above_the_workdir(tmp_path):
+    result = info_card(tmp_path, repo="parent")
     assert result.returncode == 0, result.stderr
     assert "Git branch: no git repository" in result.stdout
 

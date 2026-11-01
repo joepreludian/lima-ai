@@ -15,8 +15,10 @@ fqdn="$(hostname).local"
 ip="$( (ip -4 -o addr show lima0 2>/dev/null || true) | sed -nE 's/.*inet ([0-9.]+)\/.*/\1/p' | head -n 1)"
 ip="${ip:-unknown}"
 
+# The working copy counts as a repository only when it is the top level of
+# one: git would otherwise walk up and find a repository above it.
 workdir="$HOME/$LIMA_AI_WORKDIR"
-if git -C "$workdir" rev-parse --git-dir >/dev/null 2>&1; then
+if prefix="$(git -C "$workdir" rev-parse --show-prefix 2>/dev/null)" && [ -z "$prefix" ]; then
   branch="$(git -C "$workdir" symbolic-ref -q --short HEAD || echo '(detached HEAD)')"
 else
   branch="no git repository"
@@ -38,10 +40,16 @@ for row in "${rows[@]}"; do
 done
 edge="+$(printf '%*s' "$((width + 2))" '' | tr ' ' '-')+"
 
+# printf's %-*s pads by bytes while ${#row} counts characters, so a row with
+# accented letters would come out short; pad by the character count instead.
+line() {
+  printf '| %s%*s |\n' "$1" "$((width - ${#1}))" ''
+}
+
 echo "$edge"
-printf '| %-*s |\n' "$width" "$title"
+line "$title"
 echo "$edge"
 for row in "${rows[@]}"; do
-  printf '| %-*s |\n' "$width" "$row"
+  line "$row"
 done
 echo "$edge"
