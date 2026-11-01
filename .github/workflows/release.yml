@@ -165,6 +165,12 @@ jobs:
           uv tool install lima-ai==$VERSION
           \`\`\`
 
+          With Homebrew, on macOS:
+
+          \`\`\`bash
+          brew install joepreludian/tap/lima-ai
+          \`\`\`
+
           Or download the self-contained executable for your platform below, check
           it against \`SHA256SUMS\`, and copy \`lima-ai\` onto your \`PATH\`:
 

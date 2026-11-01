@@ -45,6 +45,7 @@ The manual is at **https://lima-ai.readthedocs.io/**:
 - Claude Code on the Mac, signed in with a Max subscription
 - An SSH key loaded in `ssh-agent`, so git over SSH works in the VMs
 - [uv](https://docs.astral.sh/uv/), to install lima-ai from PyPI or from source
+  (not needed with Homebrew)
 - Optional: [docker-backup](https://docker-backup.readthedocs.io) 0.4.0 or
   later, to restore VM backups into the Mac's Colima:
   `brew install joepreludian/tap/docker-backup`
@@ -57,12 +58,18 @@ From PyPI (recommended):
 uv tool install lima-ai      # or: pipx install lima-ai
 ```
 
+With Homebrew (installs Lima too):
+
+```bash
+brew install joepreludian/tap/lima-ai
+```
+
 Or download a self-contained executable (macOS Apple Silicon, Linux x86_64 or
 Linux arm64) from [GitHub Releases](https://github.com/joepreludian/lima-ai/releases)
 (the macOS one is unsigned; see the manual for the Gatekeeper step), or install from a checkout
 with `uv tool install .` or `make pex`. The
 [Installation](https://lima-ai.readthedocs.io/install/) page covers
-all three.
+all of these.
 
 Check it with `lima-ai --version`, then run `lima-ai doctor` to see what
 else is missing.
