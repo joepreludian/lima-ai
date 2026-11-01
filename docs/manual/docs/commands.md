@@ -19,6 +19,14 @@
 Add `-v` before a command (`lima-ai -v new …`) to print every command
 lima-ai runs.
 
+## Inside a VM
+
+`new` and `sync-claude` install one helper into the VM's `~/.local/bin`:
+
+| Command | What it does |
+|---|---|
+| `lima-ai-info` | Print this VM's FQDN, e.g. `lima-dev-myapp-feat-login.local` |
+
 ## Names
 
 | | Example for `preludian/myapp` + `feat_login` |

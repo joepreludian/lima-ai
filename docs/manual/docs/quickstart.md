@@ -66,9 +66,10 @@ cc                       # claude --dangerously-skip-permissions
 ```
 
 If the app listens on port 8002, open
-`http://lima-dev-myapp-feat-login.local:8002` in your Mac's browser. Ports
-published by `docker compose` listen on every interface, so they are
-reachable. A server you start by hand must bind `0.0.0.0` rather than
+`http://lima-dev-myapp-feat-login.local:8002` in your Mac's browser. Inside
+the VM, `lima-ai-info` prints that `.local` name, handy for scripts and for
+agents that need to tell you where the app runs. Ports published by `docker
+compose` listen on every interface, so they are reachable. A server you start by hand must bind `0.0.0.0` rather than
 `127.0.0.1` to be reachable from the Mac.
 
 ### 6. Start a second feature in parallel

@@ -128,6 +128,22 @@ def test_new_prints_summary_with_mdns_and_ip_but_no_url(env):
     assert "lima-ai shell preludian/myapp feat-a" in result.output
 
 
+def info_script_pushes(env):
+    return [c for c in env.runner.calls if c.input and "hostname" in c.input and "lima-ai-info" in c.command]
+
+
+def test_new_installs_the_guest_info_script(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    pushes = info_script_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "~/.local/bin/lima-ai-info" in pushes[0].command
+    assert "chmod 755" in pushes[0].command
+
+
 def test_new_records_instance_for_ls(env):
     env.write_token()
     base_then_clone(env)
@@ -258,6 +274,7 @@ def test_sync_claude_pushes_token_claude_and_git(env):
     assert [c for c in env.runner.calls if c.input and "CLAUDE_CODE_OAUTH_TOKEN" in c.input]
     assert env.runner.find("--copy-unsafe-links")
     assert not env.runner.find("--exclude-from=")
+    assert len(info_script_pushes(env)) == 1
 
 
 # --- SSH private keys ---------------------------------------------------------------

@@ -11,7 +11,7 @@ from lima_ai.errors import LimaAiError
 from lima_ai.gitconfig import find_private_keys, push_git_config
 from lima_ai.limactl import Instance, Limactl, gib
 from lima_ai.naming import BASE_INSTANCE, project_dir, resolve
-from lima_ai.render import render_env, rsync_excludes
+from lima_ai.render import guest_script, render_env, rsync_excludes
 from lima_ai.runner import Runner
 from lima_ai.sync import progress_flags, project_argv
 
@@ -96,6 +96,12 @@ def push_token(feature: Feature, token: str) -> None:
     """The token goes over stdin into a mode-600 file; it never appears in argv."""
     script = "umask 077 && mkdir -p ~/.config/lima-ai && cat > ~/.config/lima-ai/env && chmod 600 ~/.config/lima-ai/env"
     feature.shell(["bash", "-c", script], input=render_env(token), step="token")
+
+
+def push_info_script(feature: Feature) -> None:
+    """Install lima-ai-info (prints the VM's FQDN) into the guest's ~/.local/bin."""
+    script = "mkdir -p ~/.local/bin && cat > ~/.local/bin/lima-ai-info && chmod 755 ~/.local/bin/lima-ai-info"
+    feature.shell(["bash", "-c", script], input=guest_script("lima-ai-info"), step="guest tools")
 
 
 def ssh_keys_wanted(feature: Feature) -> bool:
@@ -219,6 +225,8 @@ def new(
         note("==> Claude token")
         push_token(feature, token)
         push_claude_and_git(feature, instance, ssh_keys)
+        note("==> Guest tools")
+        push_info_script(feature)
         note("==> Project")
         sync_project(feature, instance, ask=False)
         if branch:
@@ -251,6 +259,8 @@ def sync_claude(feature: Feature) -> None:
     note("==> Claude token")
     push_token(feature, token)
     push_claude_and_git(feature, instance, ssh_keys)
+    note("==> Guest tools")
+    push_info_script(feature)
 
 
 def open_shell(feature: Feature) -> None:

@@ -1,0 +1,5 @@
+#!/bin/bash
+# Prints this VM's FQDN: the mDNS name avahi publishes, lima-<instance>.local.
+# lima-ai installs this into ~/.local/bin of every feature VM.
+set -euo pipefail
+echo "$(hostname).local"

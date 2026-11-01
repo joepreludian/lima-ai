@@ -182,6 +182,22 @@ def test_guest_scripts_are_available(cfg):
         assert step in seal
 
 
+def test_lima_ai_info_prints_the_guest_fqdn(tmp_path):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    hostname = fake_bin / "hostname"
+    hostname.write_text("#!/bin/sh\necho lima-dev-myapp-feat-a\n")
+    hostname.chmod(0o755)
+    result = subprocess.run(
+        ["bash", "-c", guest_script("lima-ai-info")],
+        env={"PATH": f"{fake_bin}:/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "lima-dev-myapp-feat-a.local\n"
+
+
 def test_rsync_excludes_default_list_plus_extras(tmp_path):
     cfg = Config(sync=SyncConfig(extra_excludes=("*.sqlite",)))
     lines = rsync_excludes(cfg).splitlines()

@@ -37,6 +37,7 @@ sequenceDiagram
     Lima->>VM: boot with a new machine-id, SSH host keys and IP
     CLI->>VM: Claude token (over stdin, never in argv)
     CLI->>VM: rsync the ~/.claude subset and git config
+    CLI->>VM: lima-ai-info, which prints the VM's FQDN
     CLI->>VM: rsync the project into ~/work/myapp
     opt --branch or --restore
         CLI->>VM: git switch -c, docker-backup restore

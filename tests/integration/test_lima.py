@@ -173,6 +173,7 @@ def test_two_clones_serve_their_own_content_on_the_same_port(lab):
     assert served(f"dev-{PROJECT}-b") == "clone-b"
     ls = lab.cli("ls")
     assert f"lima-dev-{PROJECT}-a.local" in ls and ip_a in ls
+    assert lab.vm(f"dev-{PROJECT}-a", '"$HOME/.local/bin/lima-ai-info"') == f"lima-dev-{PROJECT}-a.local"
 
 
 def test_clone_has_the_full_toolchain(lab):
