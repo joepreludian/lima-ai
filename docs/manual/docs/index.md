@@ -1,7 +1,8 @@
 # Introduction
 
 Run several Claude Code agents in parallel on a Mac, each in its own
-disposable Linux VM, each working on one feature of your project.
+disposable Linux VM, each working on one workspace of your project: a
+branch, an experiment, a review.
 
 ```
 lima-ai new preludian/myapp feat-login     →  lima-dev-myapp-feat-login.local
@@ -17,7 +18,7 @@ write to your Mac's files, except for one backup folder.
 
 ## How it works
 
-### A golden base, cloned per feature
+### A golden base, cloned per workspace
 
 `lima-ai base` builds one Ubuntu VM, `dev-base`, with Docker, Node, Rust,
 Claude Code, rtk and docker-backup. It checks the toolchain, then seals the
@@ -37,12 +38,12 @@ sequenceDiagram
     Lima->>VM: boot with a new machine-id, SSH host keys and IP
     CLI->>VM: Claude token (over stdin, never in argv)
     CLI->>VM: rsync the ~/.claude subset and git config
-    CLI->>VM: lima-ai-info, which prints the VM's FQDN
+    CLI->>VM: lima-ai-info and the instance file (project, workspace, creation time)
     CLI->>VM: rsync the project into ~/work/myapp
-    opt --branch or --restore
-        CLI->>VM: git switch -c, docker-backup restore
+    opt branch or --restore
+        CLI->>VM: git switch, docker-backup restore
     end
-    CLI-->>You: mDNS name, IP and shell command
+    CLI-->>You: the VM's connection card, then an offer to open a shell
 ```
 
 ### Every VM has its own address
@@ -126,4 +127,4 @@ flowchart LR
 ## Next steps
 
 - [Installation](install.md): requirements and how to install lima-ai.
-- [Quickstart](quickstart.md): run two features of a project side by side.
+- [Quickstart](quickstart.md): run two workspaces of one project side by side.

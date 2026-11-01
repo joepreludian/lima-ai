@@ -1,7 +1,8 @@
 # lima-ai
 
 Run several Claude Code agents in parallel on a Mac, each in its own
-disposable Linux VM, each working on one feature of your project.
+disposable Linux VM, each working on one workspace of your project: a
+branch, an experiment, a review.
 
 ```
 lima-ai new preludian/myapp feat-login     →  lima-dev-myapp-feat-login.local
@@ -30,7 +31,7 @@ The manual is at **https://lima-ai.readthedocs.io/**:
 
 - [Introduction](https://lima-ai.readthedocs.io/): how it works, with diagrams, and what an agent in a VM can and cannot do
 - [Installation](https://lima-ai.readthedocs.io/install/): requirements and install methods
-- [Quickstart](https://lima-ai.readthedocs.io/quickstart/): two features of one project, side by side
+- [Quickstart](https://lima-ai.readthedocs.io/quickstart/): two workspaces of one project, side by side
 - [Everyday tasks](https://lima-ai.readthedocs.io/everyday/): syncing, pausing, backing up and restoring
 - [Command reference](https://lima-ai.readthedocs.io/commands/): every command and flag, and how VMs are named
 - [Configuration](https://lima-ai.readthedocs.io/configuration/): `config.toml` and the files lima-ai keeps on your Mac
