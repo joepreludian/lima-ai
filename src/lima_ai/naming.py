@@ -12,11 +12,11 @@ MAX_HOSTNAME = 63
 class Names:
     project: str  # path relative to developer_dir
     slug: str
-    feat: str
+    workspace: str
 
     @property
     def instance(self) -> str:
-        return f"dev-{self.slug}-{self.feat}"
+        return f"dev-{self.slug}-{self.workspace}"
 
     @property
     def hostname(self) -> str:
@@ -37,22 +37,31 @@ def sanitize(value: str) -> str:
     return re.sub(r"-+", "-", value).strip("-")
 
 
-def resolve(developer_dir: Path, project: str, feat: str) -> Names:
+def resolve(developer_dir: Path, project: str, workspace: str) -> Names:
     relative = _relative_project(developer_dir, project)
     slug = sanitize(relative.name)
     if not slug:
         raise LimaAiError("naming", f"project '{project}' gives an empty name once sanitised")
-    feat_name = sanitize(feat)
-    if not feat_name:
-        raise LimaAiError("naming", f"feature '{feat}' gives an empty name once sanitised")
-    names = Names(project=relative.as_posix(), slug=slug, feat=feat_name)
+    workspace_name = sanitize(workspace)
+    if not workspace_name:
+        raise LimaAiError("naming", f"workspace '{workspace}' gives an empty name once sanitised")
+    names = Names(project=relative.as_posix(), slug=slug, workspace=workspace_name)
     if len(names.hostname) > MAX_HOSTNAME:
         raise LimaAiError(
             "naming",
             f"hostname '{names.hostname}' is {len(names.hostname)} characters; "
-            f"the limit is {MAX_HOSTNAME}. Use a shorter feature name.",
+            f"the limit is {MAX_HOSTNAME}. Use a shorter workspace name.",
         )
     return names
+
+
+def check_project(developer_dir: Path, project: str) -> str:
+    """The project as a POSIX path relative to developer_dir, after checking that the folder exists."""
+    relative = _relative_project(developer_dir, project)
+    path = developer_dir / relative
+    if not path.is_dir():
+        raise LimaAiError("project", f"{path} does not exist or is not a directory")
+    return relative.as_posix()
 
 
 def _relative_project(developer_dir: Path, project: str) -> PurePosixPath:

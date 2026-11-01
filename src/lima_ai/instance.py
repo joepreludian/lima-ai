@@ -39,7 +39,7 @@ class Feature:
         return self.names.instance
 
     def hint(self, command: str) -> str:
-        return f"lima-ai {command} {self.names.project} {self.names.feat}"
+        return f"lima-ai {command} {self.names.project} {self.names.workspace}"
 
     def instance(self) -> Instance:
         instance = self.lima.get(self.name)
@@ -78,7 +78,7 @@ def record(feature: Feature) -> None:
     path = _record_path(feature.name)
     path.parent.mkdir(parents=True, exist_ok=True)
     names = feature.names
-    path.write_text(json.dumps({"project": names.project, "slug": names.slug, "feat": names.feat}) + "\n")
+    path.write_text(json.dumps({"project": names.project, "slug": names.slug, "feat": names.workspace}) + "\n")
 
 
 def lookup(name: str) -> dict | None:

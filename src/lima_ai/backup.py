@@ -185,7 +185,7 @@ def run_backup(feature: Feature, full: bool, no_images: bool, no_external: bool,
     names, dotenv = _guest_listing(feature)
     where = f"the VM's ~/{feature.names.workdir}"
     files = compose_files(explicit, names, dotenv, required=not full, where=where)
-    name = backup_name(feature.names.slug, feature.names.feat, full)
+    name = backup_name(feature.names.slug, feature.names.workspace, full)
     dest = f"{GUEST_BACKUPS}/{name}"
 
     def in_vm(argv: list[str], **kwargs):
