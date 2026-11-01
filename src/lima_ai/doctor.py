@@ -75,7 +75,7 @@ def check_optional_tool(tool: str, install: str) -> Check:
     name = f"{tool} (optional)"
     if shutil.which(tool):
         return Check(name, "ok")
-    return Check(name, "skip", f"not installed ({install})")
+    return Check(name, "skip", "not installed", install)
 
 
 def check_limactl(runner: Runner) -> Check:

@@ -185,7 +185,8 @@ def test_missing_fzf_is_skipped_not_a_problem(host):
     host.remove("fzf")
     checks = host.checks()
     assert checks["fzf (optional)"].status == "skip"
-    assert "brew install fzf" in checks["fzf (optional)"].detail
+    assert checks["fzf (optional)"].detail == "not installed"
+    assert checks["fzf (optional)"].fix == "brew install fzf"
     assert "All checks passed." in doctor.render(list(checks.values()))
 
 
