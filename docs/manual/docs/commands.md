@@ -7,7 +7,7 @@
 | `base [--rebuild]` | Build, check, seal and stop `dev-base` |
 | `template` | Print the rendered `dev-base` Lima template |
 | `new [<project>] [<workspace>] [--branch NAME \| --no-branch] [--restore BACKUP] [--cpus N] [--memory 16GiB] [--disk 100GiB]` | Create a workspace VM; asks for the project (fzf when installed), the workspace and the branch when they are not given |
-| `shell <project> <workspace>` | Open a shell in the VM's working copy, with your SSH agent forwarded |
+| `shell [<project> <workspace>]` | Open a shell in the VM's working copy, with your SSH agent forwarded; with no arguments, picks the VM for you |
 | `list` (alias `ls`) | List workspace VMs with project, workspace, status, branch and FQDN |
 | `sync <project> <workspace>` | Copy the host project into the VM again |
 | `sync-claude <project> <workspace>` | Copy the Claude token, Claude config, git config and (if enabled) SSH keys again |
@@ -18,6 +18,12 @@
 
 Add `-v` before a command (`lima-ai -v new …`) to print every command
 lima-ai runs.
+
+`lima-ai shell` on its own opens the only running workspace VM. With several
+running it shows a menu (arrow keys or `j`/`k`, Enter to pick, Ctrl-C to
+cancel) where stopped VMs are dimmed and cannot be picked. With none running
+it says so and lists the stopped ones. When stdin is not a terminal it prints
+the `list` table and the command to type instead.
 
 ## Inside a VM
 
