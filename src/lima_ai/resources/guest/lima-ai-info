@@ -1,8 +1,14 @@
 #!/bin/bash
-# Prints this VM's connection card. lima-ai installs it into ~/.local/bin of
-# every workspace VM and runs it at the end of `lima-ai new`; it is the one
-# place that formats these details.
+# Prints this VM's connection card, then a few tips about the box. lima-ai
+# installs it into ~/.local/bin of every workspace VM, runs it at the end of
+# `lima-ai new`, and the bash prompt runs it once per shell session; it is the
+# one place that formats these details.
 set -euo pipefail
+
+# The host runs this through a non-interactive shell, where ~/.bashrc has not
+# put the per-user tool directories on PATH; add them so the tool list does
+# not depend on how the script was started.
+PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/fnm/aliases/default/bin:$PATH"
 
 file="$HOME/.config/lima-ai/instance"
 if [ ! -f "$file" ]; then
@@ -53,3 +59,29 @@ for row in "${rows[@]}"; do
   line "$row"
 done
 echo "$edge"
+
+# --- tips ---------------------------------------------------------------------
+
+os_name="$( (. /etc/os-release 2>/dev/null && printf '%s %s' "$NAME" "${VERSION_ID:-}") || echo Ubuntu)"
+os_name="${os_name% }"
+
+# The tools the base image provisions, in the order they are listed; only the
+# ones present are named, since older VMs came from a smaller base.
+tools=()
+for tool in docker git lazygit tmux rg fzf jq node npm cargo claude rtk docker-backup; do
+  command -v "$tool" >/dev/null 2>&1 || continue
+  if [ "$tool" = node ]; then
+    major="$(node -v 2>/dev/null | sed -nE 's/^v?([0-9]+).*/\1/p')"
+    tool="node${major:+ $major}"
+  fi
+  tools+=("$tool")
+done
+installed="$(IFS=,; echo "${tools[*]}")"
+installed="${installed//,/, }"
+
+echo
+echo "* This is an ${os_name} box. Install whatever you want; Claude may install things here too."
+echo "* Run \`cc\` for Claude Code with permissions skipped (claude --dangerously-skip-permissions)."
+echo "* Installed here: ${installed:-nothing from the base image yet}."
+echo "* rtk trims the command output Claude reads. See what it saved with \`rtk gain\`."
+echo "* Print this again with \`lima-ai-info\`."

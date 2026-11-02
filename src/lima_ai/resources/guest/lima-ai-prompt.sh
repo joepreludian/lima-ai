@@ -8,6 +8,13 @@ case $- in *i*) ;; *) return 0 2>/dev/null || exit 0 ;; esac
 . "$HOME/.config/lima-ai/instance"
 LIMA_AI_FQDN="$(hostname).local"
 
+# Greet once per session: the card and tips from lima-ai-info. Shells started
+# from this one (nested bash, tmux panes) inherit the marker and stay quiet.
+if [ -z "${LIMA_AI_GREETED:-}" ] && [ -x "$HOME/.local/bin/lima-ai-info" ]; then
+  "$HOME/.local/bin/lima-ai-info"
+  export LIMA_AI_GREETED=1
+fi
+
 # " (branch)", " (short commit)" when HEAD is detached, nothing outside a repository.
 __lima_ai_branch() {
   local ref

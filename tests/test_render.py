@@ -304,7 +304,7 @@ def test_lima_ai_info_prints_the_card(tmp_path):
     result = info_card(tmp_path)
     assert result.returncode == 0, result.stderr
     # The longest row is the FQDN one (39 characters), so the box is 43 wide.
-    assert result.stdout == (
+    assert result.stdout.startswith(
         "+-----------------------------------------+\n"
         "| LIMA-AI - Instance Details              |\n"
         "+-----------------------------------------+\n"
@@ -315,13 +315,83 @@ def test_lima_ai_info_prints_the_card(tmp_path):
         "| Created at: 2026-11-01T14:03:22Z        |\n"
         "| Git branch: feat-a                      |\n"
         "+-----------------------------------------+\n"
+        "\n"
     )
+
+
+def test_lima_ai_info_follows_the_card_with_tips(tmp_path):
+    result = info_card(tmp_path)
+    assert result.returncode == 0, result.stderr
+    tips = result.stdout.split("+\n\n", 1)[1]
+    assert re.match(
+        r"\* This is an Ubuntu[^\n]* box\. Install whatever you want; Claude may install things here too\.", tips
+    )
+    assert "* Run `cc` for Claude Code with permissions skipped (claude --dangerously-skip-permissions)." in tips
+    assert "* Installed here: " in tips
+    assert "* rtk trims the command output Claude reads. See what it saved with `rtk gain`." in tips
+    assert "* Print this again with `lima-ai-info`." in tips
+
+
+def tools_card(tmp_path, on_path: dict[str, str] | None = None, in_home: dict[str, str] | None = None):
+    """Run lima-ai-info with a PATH that holds only the stubs in on_path plus what the script itself needs.
+
+    in_home maps a HOME-relative bin directory to a stub placed there, off PATH. Each stub prints
+    its value when asked for a version.
+    """
+    home, env = guest_home(tmp_path)
+    system = tmp_path / "system"
+    system.mkdir()
+    for tool in ("sed", "head", "tr", "git", "cat", "uname"):
+        (system / tool).symlink_to(shutil.which(tool))
+    fake_bin = tmp_path / "bin"
+    for name, version in (on_path or {}).items():
+        (fake_bin / name).write_text(f"#!/bin/sh\necho '{version}'\n")
+        (fake_bin / name).chmod(0o755)
+    for relative, version in (in_home or {}).items():
+        path = home / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"#!/bin/sh\necho '{version}'\n")
+        path.chmod(0o755)
+    env["PATH"] = f"{fake_bin}:{system}"
+    bash = shutil.which("bash")
+    return subprocess.run([bash, "-c", guest_script("lima-ai-info")], env=env, capture_output=True, text=True)
+
+
+def test_lima_ai_info_lists_only_the_tools_it_finds_in_a_fixed_order(tmp_path):
+    result = tools_card(tmp_path, on_path={"rtk": "rtk 0.3.0", "docker": "Docker version 28", "rg": "ripgrep 14"})
+    assert result.returncode == 0, result.stderr
+    assert "* Installed here: docker, git, rg, rtk.\n" in result.stdout
+
+
+def test_lima_ai_info_shows_the_node_major_version(tmp_path):
+    result = tools_card(tmp_path, on_path={"node": "v24.1.0"})
+    assert result.returncode == 0, result.stderr
+    assert "* Installed here: git, node 24.\n" in result.stdout
+
+
+def test_lima_ai_info_finds_tools_in_the_guest_homes_own_bins_off_path(tmp_path):
+    """The host runs the script through a non-interactive shell, where ~/.bashrc has not extended PATH."""
+    result = tools_card(
+        tmp_path,
+        in_home={
+            ".local/bin/claude": "2.0.0",
+            ".cargo/bin/cargo": "cargo 1.90.0",
+            ".local/share/fnm/aliases/default/bin/node": "v24.1.0",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "* Installed here: git, node 24, cargo, claude.\n" in result.stdout
+
+
+def card_lines(stdout: str) -> list[str]:
+    """The boxed card alone: everything before the blank line that starts the tips."""
+    return stdout.split("\n\n", 1)[0].splitlines()
 
 
 def test_lima_ai_info_widens_the_box_to_the_longest_row(tmp_path):
     result = info_card(tmp_path, project="clients/a-rather-long-customer-name/their-application")
     assert result.returncode == 0, result.stderr
-    lines = result.stdout.splitlines()
+    lines = card_lines(result.stdout)
     assert len({len(line) for line in lines}) == 1
     assert lines[3] == "| Project:    clients/a-rather-long-customer-name/their-application |"
 
@@ -329,7 +399,7 @@ def test_lima_ai_info_widens_the_box_to_the_longest_row(tmp_path):
 def test_lima_ai_info_keeps_the_box_aligned_for_a_non_ascii_project(tmp_path):
     result = info_card(tmp_path, project="clientes/coração", locale=utf8_locale())
     assert result.returncode == 0, result.stderr
-    lines = result.stdout.splitlines()
+    lines = card_lines(result.stdout)
     assert len({len(line) for line in lines}) == 1
     assert lines[3] == "| Project:    clientes/coração            |"
 
@@ -371,7 +441,15 @@ def test_rendered_template_passes_limactl_validate(cfg, tmp_path):
 ANSI = re.compile("\x1b\\[[0-9;]*m|[\x01\x02]")
 
 
-def prompt_session(tmp_path, commands: str, instance_file: bool = True, repo: str = "branch", ps1: str = "stock> "):
+def prompt_session(
+    tmp_path,
+    commands: str,
+    instance_file: bool = True,
+    repo: str = "branch",
+    ps1: str = "stock> ",
+    info_script: bool = False,
+    env_extra: dict[str, str] | None = None,
+):
     """Feed commands to an interactive bash whose rc file is lima-ai-prompt.sh; return everything it printed.
 
     Interactive bash prints each expanded prompt to stderr even when stdin is a pipe, so the output
@@ -383,6 +461,12 @@ def prompt_session(tmp_path, commands: str, instance_file: bool = True, repo: st
     rc = tmp_path / "rc"
     rc.write_text(f"PS1={shlex.quote(ps1)}\n" + guest_script("lima-ai-prompt.sh"))
     env["BASH_SILENCE_DEPRECATION_WARNING"] = "1"
+    env.update(env_extra or {})
+    if info_script:
+        # A stand-in for the installed lima-ai-info: the prompt only has to run it.
+        (home / ".local/bin").mkdir(parents=True)
+        (home / ".local/bin/lima-ai-info").write_text("#!/bin/sh\necho GREETING\n")
+        (home / ".local/bin/lima-ai-info").chmod(0o755)
     result = subprocess.run(
         ["bash", "--noediting", "--rcfile", str(rc), "-i"],
         input=commands,
@@ -421,6 +505,28 @@ def test_lima_ai_prompt_keeps_the_stock_prompt_without_an_instance_file(tmp_path
     output = prompt_session(tmp_path, "exit\n", instance_file=False)
     assert "stock> exit" in output
     assert "l-ai" not in output
+
+
+def test_lima_ai_prompt_greets_with_lima_ai_info_and_marks_the_session(tmp_path):
+    output = prompt_session(tmp_path, "echo greeted=$LIMA_AI_GREETED\nexit\n", info_script=True)
+    assert output.count("GREETING") == 1
+    assert "greeted=1" in output
+
+
+def test_lima_ai_prompt_greets_before_the_first_prompt(tmp_path):
+    output = prompt_session(tmp_path, "exit\n", info_script=True)
+    assert output.index("GREETING") < output.index("l-ai")
+
+
+def test_lima_ai_prompt_stays_quiet_in_a_shell_that_was_greeted_already(tmp_path):
+    output = prompt_session(tmp_path, "exit\n", info_script=True, env_extra={"LIMA_AI_GREETED": "1"})
+    assert "GREETING" not in output
+
+
+def test_lima_ai_prompt_stays_quiet_when_lima_ai_info_is_missing(tmp_path):
+    output = prompt_session(tmp_path, "exit\n")
+    assert "lima-ai-info" not in output
+    assert "No such file" not in output
 
 
 def test_prompt_install_script_adds_one_bashrc_line_however_often_it_runs(tmp_path):
