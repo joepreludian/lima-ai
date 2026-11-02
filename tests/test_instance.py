@@ -183,6 +183,30 @@ def test_new_installs_the_guest_info_script(env):
     assert "chmod 755" in pushes[0].command
 
 
+def prompt_pushes(env):
+    return [c for c in env.runner.calls if c.input and "l-ai" in c.input and "prompt.sh" in c.command]
+
+
+def test_new_installs_the_prompt_and_hooks_it_into_bashrc(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    pushes = prompt_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "~/.config/lima-ai/prompt.sh" in pushes[0].command
+    assert "~/.bashrc" in pushes[0].command
+
+
+def test_sync_claude_installs_the_prompt_too(env):
+    env.write_token()
+    existing(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert len(prompt_pushes(env)) == 1
+
+
 def test_new_records_instance_for_list(env):
     env.write_token()
     base_then_clone(env)

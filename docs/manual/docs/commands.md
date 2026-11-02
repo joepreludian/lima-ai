@@ -31,6 +31,18 @@ lima-ai runs.
 which `new` writes; on a VM made by an older lima-ai, `sync-claude` creates
 that file with an unknown creation time.
 
+They also install lima-ai's bash prompt, `~/.config/lima-ai/prompt.sh`,
+sourced from the end of `~/.bashrc`. It shows, in color, the VM's mDNS name,
+the workspace, the current folder and the git branch of that folder (or the
+commit when HEAD is detached):
+
+```
+l-ai lima-dev-myapp-feat-login.local feat-login ~/work/myapp (feat-login)$
+```
+
+Remove the `# lima-ai prompt` lines from `~/.bashrc` to get the stock prompt
+back.
+
 ## Names
 
 | | Example for `preludian/myapp` + `feat_login` |

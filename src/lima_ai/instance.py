@@ -118,6 +118,20 @@ def push_info_script(ws: Workspace) -> None:
     ws.shell(["bash", "-c", script], input=guest_script("lima-ai-info"), step="guest tools")
 
 
+# Writes the prompt file from stdin and sources it from ~/.bashrc, adding that line only once.
+PROMPT_INSTALL_SCRIPT = (
+    "mkdir -p ~/.config/lima-ai && cat > ~/.config/lima-ai/prompt.sh && "
+    "{ grep -qF 'lima-ai/prompt.sh' ~/.bashrc 2>/dev/null || "
+    "printf '\\n# lima-ai prompt\\n[ -f ~/.config/lima-ai/prompt.sh ] && . ~/.config/lima-ai/prompt.sh\\n'"
+    " >> ~/.bashrc; }"
+)
+
+
+def push_prompt(ws: Workspace) -> None:
+    """Install the l-ai bash prompt: ~/.config/lima-ai/prompt.sh, sourced from the end of ~/.bashrc."""
+    ws.shell(["bash", "-c", PROMPT_INSTALL_SCRIPT], input=guest_script("lima-ai-prompt.sh"), step="guest tools")
+
+
 def push_instance_file(ws: Workspace, created_at: str) -> None:
     """Write ~/.config/lima-ai/instance (mode 600) in the guest; lima-ai-info reads it."""
     script = "umask 077 && mkdir -p ~/.config/lima-ai && cat > ~/.config/lima-ai/instance"
@@ -241,8 +255,7 @@ def new(
     if ws.name in existing:
         raise LimaAiError(
             "preflight",
-            f"{ws.name} already exists; open it with `{ws.hint('shell')}` "
-            f"or remove it with `{ws.hint('destroy')}`",
+            f"{ws.name} already exists; open it with `{ws.hint('shell')}` or remove it with `{ws.hint('destroy')}`",
         )
     for size in (memory, disk):
         if size is not None:
@@ -263,6 +276,7 @@ def new(
         push_claude_and_git(ws, instance, ssh_keys)
         note("==> Guest tools")
         push_info_script(ws)
+        push_prompt(ws)
         push_instance_file(ws, created_at)
         note("==> Project")
         sync_project(ws, instance, ask=False)
@@ -297,6 +311,7 @@ def sync_claude(ws: Workspace) -> None:
     push_claude_and_git(ws, instance, ssh_keys)
     note("==> Guest tools")
     push_info_script(ws)
+    push_prompt(ws)
     ensure_instance_file(ws)
 
 

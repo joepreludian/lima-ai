@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -243,14 +244,8 @@ def utf8_locale() -> str:
     pytest.skip("no UTF-8 locale installed")
 
 
-def info_card(
-    tmp_path,
-    instance_file: bool = True,
-    repo: str = "branch",
-    project: str = "preludian/myapp",
-    locale: str | None = None,
-):
-    """Run lima-ai-info under a throwaway HOME. repo: 'branch', 'detached', 'none' or 'parent' (HOME is the repo)."""
+def guest_home(tmp_path, instance_file: bool = True, repo: str = "branch", project: str = "preludian/myapp"):
+    """A throwaway guest HOME and a bin of stubs. repo: 'branch', 'detached', 'none' or 'parent' (HOME is the repo)."""
     home = tmp_path / "home"
     (home / ".config/lima-ai").mkdir(parents=True)
     if instance_file:
@@ -276,7 +271,18 @@ def info_card(
         subprocess.run([*git, "checkout", "-q", "--detach"], check=True)
     if repo == "parent":
         subprocess.run([*git[:-1], str(home), "init", "-q", "-b", "main"], check=True)
-    env = {"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(home)}
+    return home, {"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(home)}
+
+
+def info_card(
+    tmp_path,
+    instance_file: bool = True,
+    repo: str = "branch",
+    project: str = "preludian/myapp",
+    locale: str | None = None,
+):
+    """Run lima-ai-info under a throwaway HOME (see guest_home)."""
+    _, env = guest_home(tmp_path, instance_file, repo, project)
     if locale:
         env["LC_ALL"] = locale
     return subprocess.run(["bash", "-c", guest_script("lima-ai-info")], env=env, capture_output=True, text=True)
@@ -346,3 +352,80 @@ def test_rendered_template_passes_limactl_validate(cfg, tmp_path):
     yaml_path = render_base(cfg, tmp_path)
     result = subprocess.run(["limactl", "validate", str(yaml_path)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+# --- lima-ai-prompt.sh ---------------------------------------------------------------
+
+ANSI = re.compile("\x1b\\[[0-9;]*m|[\x01\x02]")
+
+
+def prompt_session(tmp_path, commands: str, instance_file: bool = True, repo: str = "branch", ps1: str = "stock> "):
+    """Feed commands to an interactive bash whose rc file is lima-ai-prompt.sh; return everything it printed.
+
+    Interactive bash prints each expanded prompt to stderr even when stdin is a pipe, so the output
+    holds the prompts as a user would see them, colors included.
+    """
+    home, env = guest_home(tmp_path, instance_file, repo)
+    rc = tmp_path / "rc"
+    rc.write_text(guest_script("lima-ai-prompt.sh"))
+    env["PS1"] = ps1
+    env["BASH_SILENCE_DEPRECATION_WARNING"] = "1"
+    result = subprocess.run(
+        ["bash", "--noediting", "--rcfile", str(rc), "-i"],
+        input=commands,
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=home,
+    )
+    return result.stdout + result.stderr
+
+
+def test_lima_ai_prompt_shows_vm_workspace_folder_and_branch(tmp_path):
+    output = prompt_session(tmp_path, "cd ~/work/myapp\nexit\n")
+    assert "l-ai lima-dev-myapp-feat-a.local feat-a ~/work/myapp (feat-a)$ exit" in ANSI.sub("", output)
+
+
+def test_lima_ai_prompt_colors_every_segment(tmp_path):
+    output = prompt_session(tmp_path, "cd ~/work/myapp\nexit\n")
+    assert (
+        "\x1b[1;33ml-ai\x1b[0m \x1b[36mlima-dev-myapp-feat-a.local\x1b[0m \x1b[1;35mfeat-a\x1b[0m "
+        "\x1b[34m~/work/myapp\x1b[0m\x1b[32m (feat-a)\x1b[0m$ exit"
+    ) in output.replace("\x01", "").replace("\x02", "")
+
+
+def test_lima_ai_prompt_drops_the_branch_outside_a_repository(tmp_path):
+    output = prompt_session(tmp_path, "cd ~\nexit\n", repo="none")
+    assert "l-ai lima-dev-myapp-feat-a.local feat-a ~$ exit" in ANSI.sub("", output)
+
+
+def test_lima_ai_prompt_shows_the_commit_when_head_is_detached(tmp_path):
+    output = prompt_session(tmp_path, "cd ~/work/myapp\nexit\n", repo="detached")
+    assert re.search(r"feat-a ~/work/myapp \([0-9a-f]{7,}\)\$ exit", ANSI.sub("", output))
+
+
+def test_lima_ai_prompt_keeps_the_stock_prompt_without_an_instance_file(tmp_path):
+    output = prompt_session(tmp_path, "exit\n", instance_file=False)
+    assert "stock> exit" in output
+    assert "l-ai" not in output
+
+
+def test_prompt_install_script_adds_one_bashrc_line_however_often_it_runs(tmp_path):
+    from lima_ai.instance import PROMPT_INSTALL_SCRIPT
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".bashrc").write_text("PS1='stock> '\n")
+    for _ in range(2):
+        subprocess.run(
+            ["bash", "-c", PROMPT_INSTALL_SCRIPT],
+            input="# prompt\n",
+            env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+            check=True,
+            text=True,
+        )
+    assert (home / ".config/lima-ai/prompt.sh").read_text() == "# prompt\n"
+    bashrc = (home / ".bashrc").read_text()
+    assert bashrc.startswith("PS1='stock> '\n")
+    assert bashrc.count("# lima-ai prompt\n") == 1
+    assert bashrc.count(". ~/.config/lima-ai/prompt.sh") == 1
