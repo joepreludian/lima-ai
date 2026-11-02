@@ -12,7 +12,7 @@
 | `sync <project> <workspace>` | Copy the host project into the VM again |
 | `sync-claude <project> <workspace>` | Copy the Claude token, Claude config, git config and (if enabled) SSH keys again |
 | `start <project> <workspace>` / `stop <project> <workspace>` | Start or stop a workspace VM |
-| `destroy <project> <workspace> [--yes] [--force]` | Delete a workspace VM after checking for unsaved work |
+| `destroy [<project> <workspace>] [--yes] [--force]` | Delete workspace VMs after checking for unsaved work; with no arguments, pick them from a checklist |
 | `backup <project> <workspace> [--full] [--no-images] [--no-external] [--compose-file FILE]...` | Back up the project's Docker data to the backups folder |
 | `restore <project> <workspace> <backup> [--overwrite] [--full] [--compose-file FILE]...` | Restore a backup into the VM |
 
@@ -24,6 +24,14 @@ running it shows a menu (arrow keys or `j`/`k`, Enter to pick, Ctrl-C to
 cancel) where stopped VMs are dimmed and cannot be picked. With none running
 it says so and lists the stopped ones. When stdin is not a terminal it prints
 the `list` table and the command to type instead.
+
+`lima-ai destroy` on its own lists every workspace VM, running and stopped,
+with a checkbox each (space to tick, `a` for all, `i` to invert, Enter to
+confirm, Ctrl-C to cancel). It then checks the ticked running VMs for unsaved
+work, shows what it will delete, asks once, and deletes them. `--force` skips
+that question; `--yes` skips it unless a ticked VM holds unsaved work. When
+stdin is not a terminal it prints the `list` table and asks for the names
+instead.
 
 ## Inside a VM
 
