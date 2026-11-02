@@ -1,4 +1,7 @@
-# lima-ai
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/joepreludian/lima-ai/main/docs/images/logo-dark.svg">
+  <img alt="lima-ai" src="https://raw.githubusercontent.com/joepreludian/lima-ai/main/docs/images/logo.svg" width="360">
+</picture>
 
 Run several Claude Code agents in parallel on a Mac, each in its own
 disposable Linux VM, each working on one workspace of your project: a
