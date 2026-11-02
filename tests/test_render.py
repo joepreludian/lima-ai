@@ -1,4 +1,5 @@
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -377,9 +378,10 @@ def prompt_session(tmp_path, commands: str, instance_file: bool = True, repo: st
     holds the prompts as a user would see them, colors included.
     """
     home, env = guest_home(tmp_path, instance_file, repo)
+    # Debian's bash reads /etc/bash.bashrc, which sets PS1, before the rc file; a PS1 in the
+    # environment would be overridden there, so the rc file sets the stock prompt itself.
     rc = tmp_path / "rc"
-    rc.write_text(guest_script("lima-ai-prompt.sh"))
-    env["PS1"] = ps1
+    rc.write_text(f"PS1={shlex.quote(ps1)}\n" + guest_script("lima-ai-prompt.sh"))
     env["BASH_SILENCE_DEPRECATION_WARNING"] = "1"
     result = subprocess.run(
         ["bash", "--noediting", "--rcfile", str(rc), "-i"],
