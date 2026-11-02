@@ -4,8 +4,11 @@ import json
 import re
 import tempfile
 
+import pytest
+
 from lima_ai import instance, menu, wizard
 from lima_ai.config import SyncConfig, config_dir, state_dir
+from lima_ai.errors import LimaAiError
 from tests.conftest import CARD, GUEST_HOME
 from tests.fakes import lima_list
 
@@ -767,6 +770,81 @@ def test_rm_forgets_instance_record(env):
     record.write_text("{}")
     env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"])
     assert not record.exists()
+
+
+def two_workspaces(env, other_status="Stopped"):
+    env.runner.on(
+        "limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Running"), (OTHER, other_status))
+    )
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    write_record(OTHER, "other/thing", "thing", "b")
+    env.runner.on("@{u}..", "")
+    return [
+        instance.Workspace(env.cfg, env.runner, env.home, "preludian/myapp", "feat-a"),
+        instance.Workspace(env.cfg, env.runner, env.home, "other/thing", "b"),
+    ]
+
+
+def test_remove_many_reports_each_vm_and_checks_only_running_ones(env):
+    workspaces = two_workspaces(env)
+    env.runner.on("status --porcelain", " M app.py\n")
+    lines, unsaved = instance.removal_report(workspaces)
+    assert lines == [
+        f"  {INSTANCE} (preludian/myapp feat-a)",
+        "    Uncommitted changes:",
+        "     M app.py",
+        f"  {OTHER} (other/thing b)",
+        "    stopped, so unsaved work in it cannot be checked",
+    ]
+    assert unsaved is True
+    assert all(OTHER not in call.command for call in env.runner.find("status --porcelain"))
+
+
+def test_remove_many_asks_once_then_deletes_in_order(env, monkeypatch):
+    workspaces = two_workspaces(env)
+    asked = []
+    monkeypatch.setattr(instance.click, "confirm", lambda msg, **kw: asked.append(msg))
+    instance.remove_many(workspaces, yes=False, force=False)
+    assert asked == ["Delete 2 VMs?"]
+    assert [c for c in env.runner.commands if "limactl delete" in c] == [
+        f"limactl delete -f {INSTANCE}",
+        f"limactl delete -f {OTHER}",
+    ]
+    assert not (state_dir() / f"instances/{INSTANCE}.json").exists()
+    assert not (state_dir() / f"instances/{OTHER}.json").exists()
+
+
+def test_remove_many_warns_in_the_question_when_work_is_unsaved(env, monkeypatch):
+    workspaces = two_workspaces(env)
+    env.runner.on("status --porcelain", "?? notes.txt\n")
+    asked = []
+    monkeypatch.setattr(instance.click, "confirm", lambda msg, **kw: asked.append(msg))
+    instance.remove_many(workspaces[:1], yes=True, force=False)
+    assert asked == ["This work exists only in the VMs and will be lost. Delete 1 VM?"]
+
+
+def test_remove_many_with_yes_skips_the_question_when_nothing_is_unsaved(env, monkeypatch):
+    workspaces = two_workspaces(env)
+    monkeypatch.setattr(instance.click, "confirm", lambda *a, **kw: pytest.fail("asked"))
+    instance.remove_many(workspaces, yes=True, force=False)
+    assert len(env.runner.find("limactl delete")) == 2
+
+
+def test_remove_many_with_force_never_asks(env, monkeypatch):
+    workspaces = two_workspaces(env)
+    env.runner.on("status --porcelain", "?? notes.txt\n")
+    monkeypatch.setattr(instance.click, "confirm", lambda *a, **kw: pytest.fail("asked"))
+    instance.remove_many(workspaces, yes=False, force=True)
+    assert len(env.runner.find("limactl delete")) == 2
+
+
+def test_remove_many_stops_at_the_first_failed_delete(env):
+    workspaces = two_workspaces(env)
+    env.runner.on(f"limactl delete -f {INSTANCE}", returncode=1, stderr="boom")
+    with pytest.raises(LimaAiError):
+        instance.remove_many(workspaces, yes=False, force=True)
+    assert not env.runner.find(f"limactl delete -f {OTHER}")
+    assert (state_dir() / f"instances/{OTHER}.json").exists()
 
 
 def git_positions(env, host: tuple[str, str], guest: tuple[str, str]) -> None:

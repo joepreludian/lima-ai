@@ -400,9 +400,41 @@ def remove(ws: Workspace, yes: bool, force: bool) -> None:
     if risks and not force:
         note("\n".join(risks))
         click.confirm("This work exists only in the VM and will be lost. Delete anyway?", abort=True, err=True)
+    delete(ws)
+
+
+def delete(ws: Workspace) -> None:
     ws.lima.delete(ws.name)
     forget(ws.name)
     click.echo(f"Deleted {ws.name}.")
+
+
+def removal_report(workspaces: list[Workspace]) -> tuple[list[str], bool]:
+    """The `Will delete:` block for several VMs, and whether any running one holds unsaved work."""
+    lines: list[str] = []
+    unsaved = False
+    for ws in workspaces:
+        lines.append(f"  {ws.name} ({ws.names.project} {ws.names.workspace})")
+        if ws.instance().running:
+            risks = unsaved_work(ws)
+            unsaved = unsaved or bool(risks)
+            lines += [f"    {risk}" for risk in risks]
+        else:
+            lines.append("    stopped, so unsaved work in it cannot be checked")
+    return lines, unsaved
+
+
+def remove_many(workspaces: list[Workspace], yes: bool, force: bool) -> None:
+    """Report every VM, ask once, then delete them in order; a failing delete stops there."""
+    lines, unsaved = removal_report(workspaces)
+    note("\n".join(["Will delete:", *lines]))
+    if not (force or (yes and not unsaved)):
+        question = f"Delete {len(workspaces)} VM{'s' if len(workspaces) != 1 else ''}?"
+        if unsaved:
+            question = f"This work exists only in the VMs and will be lost. {question}"
+        click.confirm(question, abort=True, err=True)
+    for ws in workspaces:
+        delete(ws)
 
 
 def workspace_vms(lima: Limactl) -> list[tuple[Instance, dict | None]]:
