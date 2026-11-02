@@ -150,12 +150,20 @@ def test_system_script_closes_chronys_udp_command_port(cfg, tmp_path):
     assert "/etc/chrony/conf.d/" in text
 
 
-def test_claude_script_sets_up_shell_and_onboarding(cfg, tmp_path):
+def test_claude_script_sets_up_the_shell(cfg, tmp_path):
     render_base(cfg, tmp_path)
     text = (tmp_path / "provision/50-claude.sh").read_text()
-    assert "hasCompletedOnboarding" in text
     assert "alias cc='claude --dangerously-skip-permissions'" in text
     assert ".config/lima-ai/env" in text
+    # The installer creates ~/.claude.json itself, so onboarding is marked done per VM instead.
+    assert ".claude.json" not in text
+
+
+def test_claude_setup_script_marks_onboarding_done_and_wires_rtk():
+    text = guest_script("lima-ai-claude-setup")
+    assert "jq '.hasCompletedOnboarding = true'" in text
+    assert "rtk init -g --auto-patch" in text
+    assert "</dev/null" in text  # rtk must not read the script's stdin
 
 
 def test_guest_scripts_are_available(cfg):

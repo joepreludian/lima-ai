@@ -55,6 +55,11 @@ Docker daemon instead of one project.
   at the same place. History, sessions, caches, credentials and
   `~/.claude.json` stay on your Mac. Sessions created in the VM survive a
   `sync-claude`.
+  After the copy, `lima-ai-claude-setup` runs in the VM: it marks Claude's
+  onboarding as done in the VM's own `~/.claude.json`, so the token logs
+  you in without the first-run wizard, and runs `rtk init -g --auto-patch`,
+  which adds the rtk hook to `settings.json`, writes `RTK.md` and
+  references it from `CLAUDE.md`.
 - **Git config**: `~/.gitconfig` without the Mac-only parts: difftool and
   mergetool entries, the `osxkeychain` credential helper, and signing
   programs installed only on the Mac. When a signing program is removed,

@@ -199,6 +199,36 @@ def test_new_installs_the_prompt_and_hooks_it_into_bashrc(env):
     assert "~/.bashrc" in pushes[0].command
 
 
+def claude_setup_pushes(env):
+    return [
+        c
+        for c in env.runner.calls
+        if c.input and "hasCompletedOnboarding" in c.input and "rtk init -g --auto-patch" in c.input
+    ]
+
+
+def test_new_sets_up_claude_after_copying_its_config(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    pushes = claude_setup_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "~/.local/bin/lima-ai-claude-setup" in pushes[0].command
+    assert "chmod 755" in pushes[0].command
+    cmds = env.runner.commands
+    assert index_of(cmds, "rsync -a --copy-unsafe-links") < cmds.index(pushes[0].command)
+
+
+def test_sync_claude_sets_up_claude_too(env):
+    env.write_token()
+    existing(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert len(claude_setup_pushes(env)) == 1
+
+
 def test_sync_claude_installs_the_prompt_too(env):
     env.write_token()
     existing(env)

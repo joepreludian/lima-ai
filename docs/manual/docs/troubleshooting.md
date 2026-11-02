@@ -10,6 +10,13 @@ failed. Fix the cause, then run `lima-ai sync …` if the project copy failed,
 or `lima-ai sync-claude …` for the token, Claude or git steps. To start
 over, run `lima-ai destroy … --force`.
 
+**Claude asks you to log in inside a VM.** The token is read from
+`~/.config/lima-ai/env` by every interactive shell, but Claude still shows
+its first-run wizard (theme, then login) until `~/.claude.json` in the VM
+says onboarding is done. `lima-ai sync-claude …` pushes the token again and
+runs `lima-ai-claude-setup`, which sets that flag and wires rtk; inside the
+VM, running `lima-ai-claude-setup` does the same.
+
 **"dev-base is running".** Clones are made from a stopped base. Stop it with
 `limactl stop dev-base`.
 

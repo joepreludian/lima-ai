@@ -7,11 +7,6 @@ marker="$HOME/.local/state/lima-ai/50-claude.done"
 curl -fsSL https://claude.ai/install.sh | bash
 test -x "$HOME/.local/bin/claude"
 
-# The token in ~/.config/lima-ai/env logs claude in; skip the first-run wizard.
-if [ ! -e "$HOME/.claude.json" ]; then
-  echo '{"hasCompletedOnboarding": true}' > "$HOME/.claude.json"
-fi
-
 cat >> "$HOME/.bashrc" <<'BASHRC'
 
 # >>> lima-ai >>>

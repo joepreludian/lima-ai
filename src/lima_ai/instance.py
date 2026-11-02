@@ -112,6 +112,15 @@ def push_token(ws: Workspace, token: str) -> None:
     ws.shell(["bash", "-c", script], input=render_env(token), step="token")
 
 
+def push_claude_setup(ws: Workspace) -> None:
+    """Install and run lima-ai-claude-setup: onboarding done in ~/.claude.json, rtk wired into the config."""
+    script = (
+        "mkdir -p ~/.local/bin && cat > ~/.local/bin/lima-ai-claude-setup && "
+        "chmod 755 ~/.local/bin/lima-ai-claude-setup && ~/.local/bin/lima-ai-claude-setup"
+    )
+    ws.shell(["bash", "-c", script], input=guest_script("lima-ai-claude-setup"), step="claude setup")
+
+
 def push_info_script(ws: Workspace) -> None:
     """Install lima-ai-info (prints the VM's connection card) into the guest's ~/.local/bin."""
     script = "mkdir -p ~/.local/bin && cat > ~/.local/bin/lima-ai-info && chmod 755 ~/.local/bin/lima-ai-info"
@@ -165,6 +174,7 @@ def ssh_keys_wanted(ws: Workspace) -> bool:
 def push_claude_and_git(ws: Workspace, instance: Instance, ssh_keys: bool) -> None:
     note("==> Claude config")
     push_claude_config(ws.runner, instance, ws.guest_home, ws.cfg.developer_dir, ws.host_home)
+    push_claude_setup(ws)
     note("==> Git config" + (" and SSH keys" if ssh_keys else ""))
     push_git_config(ws.runner, instance, ws.host_home, ssh_keys=ssh_keys)
 

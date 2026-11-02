@@ -27,11 +27,12 @@ the `list` table and the command to type instead.
 
 ## Inside a VM
 
-`new` and `sync-claude` install one helper into the VM's `~/.local/bin`:
+`new` and `sync-claude` install two helpers into the VM's `~/.local/bin`:
 
 | Command | What it does |
 |---|---|
 | `lima-ai-info` | Print the VM's connection card: project, workspace, FQDN, IP, creation time and current git branch |
+| `lima-ai-claude-setup` | Mark Claude's onboarding as done in `~/.claude.json` and wire rtk into `~/.claude` (`rtk init -g --auto-patch`); both commands run it after copying the Claude config |
 
 `new` runs it for you when the VM is ready. It reads `~/.config/lima-ai/instance`,
 which `new` writes; on a VM made by an older lima-ai, `sync-claude` creates
