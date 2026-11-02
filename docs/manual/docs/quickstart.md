@@ -59,8 +59,8 @@ host's branch.
 
 In under a minute this clones `dev-base`, starts the clone, copies in your
 Claude token, `~/.claude` config, git config and the project, and switches
-to the branch. The VM then prints its connection card and `new` offers to
-open a shell:
+to the branch. The VM then prints its connection card with a few tips about
+the box, and `new` offers to open a shell:
 
 ```
 +---------------------------------------------+
@@ -73,6 +73,12 @@ open a shell:
 | Created at: 2026-11-01T14:03:22Z            |
 | Git branch: feat-login                      |
 +---------------------------------------------+
+
+* This is an Ubuntu 26.04 box. Install whatever you want; Claude may install things here too.
+* Run `cc` for Claude Code with permissions skipped (claude --dangerously-skip-permissions).
+* Installed here: docker, git, lazygit, tmux, rg, fzf, jq, node 24, npm, cargo, claude, rtk, docker-backup.
+* rtk trims the command output Claude reads. See what it saved with `rtk gain`.
+* Print this again with `lima-ai-info`.
 Open it with: lima-ai shell preludian/myapp feat-login
 Open a shell in it now? [Y/n]:
 ```
@@ -86,7 +92,8 @@ created, and `destroy` cannot check that VM for unsaved work.
 lima-ai shell preludian/myapp feat-login
 ```
 
-You land in the VM's working copy, `~/work/myapp`. From there:
+The shell greets you with the same card and tips, once per session, and you
+land in the VM's working copy, `~/work/myapp`. From there:
 
 ```bash
 docker compose up -d     # your app, on the VM's own address
@@ -95,8 +102,8 @@ cc                       # claude --dangerously-skip-permissions
 
 If the app listens on port 8002, open
 `http://lima-dev-myapp-feat-login.local:8002` in your Mac's browser. Inside
-the VM, `lima-ai-info` prints the same card, handy for agents that need to
-tell you where the app runs. Ports published by `docker compose` listen on
+the VM, `lima-ai-info` prints the card and tips again, handy for agents that
+need to tell you where the app runs. Ports published by `docker compose` listen on
 every interface, so they are reachable. A server you start by hand must bind
 `0.0.0.0` rather than `127.0.0.1` to be reachable from the Mac.
 

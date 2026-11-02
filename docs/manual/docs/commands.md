@@ -39,7 +39,7 @@ instead.
 
 | Command | What it does |
 |---|---|
-| `lima-ai-info` | Print the VM's connection card: project, workspace, FQDN, IP, creation time and current git branch |
+| `lima-ai-info` | Print the VM's connection card (project, workspace, FQDN, IP, creation time and current git branch), then tips: the Ubuntu release, the `cc` alias, which of the base image's tools are installed, and `rtk gain` |
 | `lima-ai-claude-setup` | Mark Claude's onboarding as done in `~/.claude.json` and wire rtk into `~/.claude` (`rtk init -g --auto-patch`); both commands run it after copying the Claude config |
 
 `new` runs it for you when the VM is ready. It reads `~/.config/lima-ai/instance`,
@@ -47,7 +47,9 @@ which `new` writes; on a VM made by an older lima-ai, `sync-claude` creates
 that file with an unknown creation time.
 
 They also install lima-ai's bash prompt, `~/.config/lima-ai/prompt.sh`,
-sourced from the end of `~/.bashrc`. It shows, in color, the VM's mDNS name,
+sourced from the end of `~/.bashrc`. It runs `lima-ai-info` once per shell
+session (shells started from that one, such as tmux panes, inherit
+`LIMA_AI_GREETED` and stay quiet), then shows, in color, the VM's mDNS name,
 the workspace, the current folder and the git branch of that folder (or the
 commit when HEAD is detached):
 
