@@ -200,13 +200,23 @@ def stop(app: App, project: str, workspace: str) -> None:
     instance.stop(app.workspace(project, workspace))
 
 
-@workspace_command()
+@cli.command()
+@click.argument("project", required=False)
+@click.argument("workspace", required=False)
 @click.option("--yes", is_flag=True, help="Skip the first confirmation.")
 @click.option("--force", is_flag=True, help="Skip every confirmation, including the one about unsaved work.")
 @pass_app
-def destroy(app: App, project: str, workspace: str, yes: bool, force: bool) -> None:
-    """Delete a workspace VM, after checking it for uncommitted or unpushed work."""
-    instance.remove(app.workspace(project, workspace), yes=yes, force=force)
+def destroy(app: App, project: str | None, workspace: str | None, yes: bool, force: bool) -> None:
+    """Delete workspace VMs after checking them for unsaved work; with no arguments, tick them in a checklist."""
+    if (project is None) != (workspace is None):
+        raise click.UsageError("give both PROJECT and WORKSPACE, or neither to pick from a list")
+    if project is not None and workspace is not None:
+        instance.remove(app.workspace(project, workspace), yes=yes, force=force)
+        return
+    app.require("limactl")
+    picks = instance.pick_vms(app.runner, app.interactive)
+    if picks:
+        instance.remove_many([app.workspace(p, w) for p, w in picks], yes=yes, force=force)
 
 
 @workspace_command("backup")

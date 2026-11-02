@@ -847,6 +847,104 @@ def test_remove_many_stops_at_the_first_failed_delete(env):
     assert (state_dir() / f"instances/{OTHER}.json").exists()
 
 
+def test_destroy_without_arguments_with_no_vms_says_so(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped")))
+    result = env.invoke(["destroy"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "no workspace VMs; nothing to destroy" in result.output
+    assert not env.runner.find("limactl delete")
+
+
+def test_destroy_without_arguments_needs_a_terminal(env):
+    two_workspaces(env)
+    result = env.invoke(["destroy"], interactive=False)
+    assert result.exit_code == 1
+    assert "error [destroy]: destroy needs PROJECT WORKSPACE when stdin is not a terminal" in result.output
+    assert result.output.splitlines()[1].split()[:5] == ["PROJECT", "WORKSPACE", "STATUS", "BRANCH", "FQDN"]
+    assert not env.runner.find("limactl delete")
+
+
+def test_destroy_without_arguments_offers_only_recorded_workspace_vms(env, monkeypatch):
+    three_vms(env)  # dev-base stopped, INSTANCE running, dev-other-thing-b stopped (no record), default running
+    seen = []
+    monkeypatch.setattr(menu, "choose_vms", lambda rows: seen.append(rows) or None)
+    env.invoke(["destroy"], interactive=True)
+    assert [(r.project, r.workspace, r.status) for r in seen[0]] == [("preludian/myapp", "feat-a", "Running")]
+
+
+def test_destroy_without_arguments_aborts_when_the_checklist_is_cancelled(env, monkeypatch):
+    two_workspaces(env)
+    monkeypatch.setattr(menu, "choose_vms", lambda rows: None)
+    result = env.invoke(["destroy"], interactive=True)
+    assert result.exit_code == 1
+    assert "Aborted" in result.output
+    assert not env.runner.find("limactl delete")
+
+
+def test_destroy_without_arguments_with_nothing_ticked_deletes_nothing(env, monkeypatch):
+    two_workspaces(env)
+    monkeypatch.setattr(menu, "choose_vms", lambda rows: [])
+    result = env.invoke(["destroy"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "Nothing selected." in result.output
+    assert not env.runner.find("limactl delete")
+    assert not env.runner.find("status --porcelain")
+
+
+def test_destroy_without_arguments_asks_once_and_deletes_the_ticked_vms(env, monkeypatch):
+    two_workspaces(env)
+    monkeypatch.setattr(menu, "choose_vms", lambda rows: [("preludian/myapp", "feat-a"), ("other/thing", "b")])
+    result = env.invoke(["destroy"], interactive=True, input="n\n")
+    assert result.exit_code == 1
+    assert "Will delete:" in result.output
+    assert result.output.count("Delete 2 VMs?") == 1
+    assert not env.runner.find("limactl delete")
+    result = env.invoke(["destroy"], interactive=True, input="y\n")
+    assert result.exit_code == 0, result.output
+    assert [c for c in env.runner.commands if "limactl delete" in c] == [
+        f"limactl delete -f {INSTANCE}",
+        f"limactl delete -f {OTHER}",
+    ]
+    assert f"Deleted {INSTANCE}." in result.output and f"Deleted {OTHER}." in result.output
+
+
+def test_destroy_without_arguments_yes_still_asks_when_work_is_unsaved(env, monkeypatch):
+    two_workspaces(env)
+    env.runner.on("status --porcelain", "?? notes.txt\n")
+    monkeypatch.setattr(menu, "choose_vms", lambda rows: [("preludian/myapp", "feat-a")])
+    result = env.invoke(["destroy", "--yes"], interactive=True, input="n\n")
+    assert result.exit_code == 1
+    assert "notes.txt" in result.output
+    assert "will be lost. Delete 1 VM?" in result.output
+    assert not env.runner.find("limactl delete")
+
+
+def test_destroy_without_arguments_does_not_check_stopped_vms(env, monkeypatch):
+    two_workspaces(env)
+    monkeypatch.setattr(menu, "choose_vms", lambda rows: [("other/thing", "b")])
+    result = env.invoke(["destroy", "--force"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "stopped, so unsaved work in it cannot be checked" in result.output
+    assert not env.runner.find("status --porcelain")
+    assert env.runner.find(f"limactl delete -f {OTHER}")
+
+
+def test_destroy_without_arguments_stops_at_the_first_failed_delete(env, monkeypatch):
+    two_workspaces(env)
+    monkeypatch.setattr(menu, "choose_vms", lambda rows: [("preludian/myapp", "feat-a"), ("other/thing", "b")])
+    env.runner.on(f"limactl delete -f {INSTANCE}", returncode=1, stderr="boom")
+    result = env.invoke(["destroy", "--force"], interactive=True)
+    assert result.exit_code == 1
+    assert "error [delete]" in result.output
+    assert not env.runner.find(f"limactl delete -f {OTHER}")
+
+
+def test_destroy_with_one_argument_is_a_usage_error(env):
+    result = env.invoke(["destroy", "preludian/myapp"])
+    assert result.exit_code == 2
+    assert "both PROJECT and WORKSPACE" in result.output
+
+
 def git_positions(env, host: tuple[str, str], guest: tuple[str, str]) -> None:
     host_repo = env.cfg.developer_dir / "preludian/myapp"
     env.runner.on(f"git -C {host_repo} symbolic-ref -q --short HEAD", host[0] + "\n")

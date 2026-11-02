@@ -354,6 +354,27 @@ def pick_vm(runner: Runner, interactive: bool) -> tuple[str, str]:
     return choice
 
 
+def pick_vms(runner: Runner, interactive: bool) -> list[tuple[str, str]]:
+    """(project, workspace) pairs ticked in the destroy checklist; [] when there is nothing to delete."""
+    lima = Limactl(runner)
+    rows = [menu.VmRow(info["project"], info["workspace"], vm.status) for vm, info in workspace_vms(lima) if info]
+    if not rows:
+        click.echo("no workspace VMs; nothing to destroy")
+        return []
+    if not interactive:
+        raise LimaAiError(
+            "destroy",
+            "destroy needs PROJECT WORKSPACE when stdin is not a terminal",
+            stderr_tail="\n".join(list_lines(lima)),
+        )
+    picks = menu.choose_vms(rows)
+    if picks is None:
+        raise click.Abort()
+    if not picks:
+        click.echo("Nothing selected.")
+    return picks
+
+
 def start(ws: Workspace) -> None:
     ws.instance()
     ws.lima.start(ws.name)
