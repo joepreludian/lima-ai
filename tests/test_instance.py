@@ -4,7 +4,7 @@ import json
 import re
 import tempfile
 
-from lima_ai import instance, wizard
+from lima_ai import instance, menu, wizard
 from lima_ai.config import SyncConfig, config_dir, state_dir
 from tests.conftest import CARD, GUEST_HOME
 from tests.fakes import lima_list
@@ -489,6 +489,94 @@ def test_shell_opens_interactive_shell_in_workdir(env):
     call = env.runner.find(f"limactl shell --workdir {WORKDIR} {INSTANCE}")[0]
     assert call.argv[-1] == INSTANCE
     assert call.interactive
+
+
+OTHER = "dev-thing-b"
+
+
+def write_record(name: str, project: str, slug: str, workspace: str) -> None:
+    folder = state_dir() / "instances"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{name}.json").write_text(json.dumps({"project": project, "slug": slug, "workspace": workspace}))
+
+
+def two_running(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Running"), (OTHER, "Running")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    write_record(OTHER, "other/thing", "thing", "b")
+
+
+def test_shell_without_arguments_opens_the_only_running_vm(env):
+    three_vms(env)  # dev-base stopped, INSTANCE running, OTHER stopped, `default` running
+    result = env.invoke(["shell"])
+    assert result.exit_code == 0, result.output
+    assert env.runner.find(f"limactl shell --workdir {WORKDIR} {INSTANCE}")[0].interactive
+
+
+def test_shell_without_arguments_ignores_vms_that_are_not_workspaces(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Running"), ("default", "Running")))
+    result = env.invoke(["shell"])
+    assert result.exit_code == 1
+    assert "no running workspace VMs" in result.output
+
+
+def test_shell_without_arguments_errors_and_lists_stopped_vms_when_none_runs(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Stopped"), (OTHER, "Stopped")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    write_record(OTHER, "other/thing", "thing", "b")
+    result = env.invoke(["shell"])
+    assert result.exit_code == 1
+    assert "error [shell]: no running workspace VMs; start one with `lima-ai start PROJECT WORKSPACE`" in result.output
+    assert "preludian/myapp  feat-a  Stopped" in result.output
+    assert "other/thing      b       Stopped" in result.output
+    assert not env.runner.find("limactl shell")
+
+
+def test_shell_without_arguments_skips_vms_without_a_record(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Running"), (OTHER, "Running")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    result = env.invoke(["shell"])
+    assert result.exit_code == 0, result.output
+    assert env.runner.find(f"limactl shell --workdir {WORKDIR} {INSTANCE}")
+    assert not env.runner.find(f"limactl shell --workdir {GUEST_HOME}/work/thing")
+
+
+def test_shell_without_arguments_prints_the_list_when_stdin_is_not_a_terminal(env):
+    two_running(env)
+    result = env.invoke(["shell"], interactive=False)
+    assert result.exit_code == 1
+    assert "several workspace VMs are running:" in result.output
+    assert result.output.splitlines()[1].split()[:5] == ["PROJECT", "WORKSPACE", "STATUS", "BRANCH", "FQDN"]
+    assert "preludian/myapp" in result.output and "other/thing" in result.output
+    assert "open one with: lima-ai shell PROJECT WORKSPACE" in result.output
+    assert not env.runner.find("limactl shell --workdir")
+
+
+def test_shell_without_arguments_opens_the_vm_picked_in_the_menu(env, monkeypatch):
+    two_running(env)
+    seen = []
+    monkeypatch.setattr(menu, "choose_vm", lambda rows: seen.append(rows) or ("other/thing", "b"))
+    result = env.invoke(["shell"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert [(r.project, r.workspace, r.status) for r in seen[0]] == [
+        ("preludian/myapp", "feat-a", "Running"),
+        ("other/thing", "b", "Running"),
+    ]
+    assert env.runner.find(f"limactl shell --workdir {GUEST_HOME}/work/thing {OTHER}")[0].interactive
+
+
+def test_shell_without_arguments_aborts_when_the_menu_is_cancelled(env, monkeypatch):
+    two_running(env)
+    monkeypatch.setattr(menu, "choose_vm", lambda rows: None)
+    result = env.invoke(["shell"], interactive=True)
+    assert result.exit_code == 1
+    assert not env.runner.find("limactl shell --workdir")
+
+
+def test_shell_with_one_argument_is_a_usage_error(env):
+    result = env.invoke(["shell", "preludian/myapp"])
+    assert result.exit_code == 2
+    assert "both PROJECT and WORKSPACE" in result.output
 
 
 def test_start_and_stop(env):

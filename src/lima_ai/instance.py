@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from lima_ai import auth
+from lima_ai import auth, menu
 from lima_ai.claude_config import push_claude_config
 from lima_ai.config import Config, save_ssh_keys, state_dir
 from lima_ai.errors import LimaAiError
@@ -319,6 +319,29 @@ def open_shell(ws: Workspace) -> int:
     ws.running_instance()
     result = ws.lima.shell(ws.name, [], workdir=ws.workdir, interactive=True, check=False)
     return result.returncode
+
+
+def pick_vm(runner: Runner, interactive: bool) -> tuple[str, str]:
+    """(project, workspace) to open when `shell` gets no arguments: the only running VM, or the user's pick."""
+    lima = Limactl(runner)
+    rows = [menu.VmRow(info["project"], info["workspace"], vm.status) for vm, info in workspace_vms(lima) if info]
+    running = [row for row in rows if row.running]
+    if not running:
+        stopped = [[row.project, row.workspace, row.status] for row in rows]
+        raise LimaAiError(
+            "shell",
+            "no running workspace VMs; start one with `lima-ai start PROJECT WORKSPACE`",
+            stderr_tail="\n".join(table_lines(stopped)) if stopped else "",
+        )
+    if len(running) == 1:
+        return running[0].project, running[0].workspace
+    if not interactive:
+        tail = [*list_lines(lima), "open one with: lima-ai shell PROJECT WORKSPACE"]
+        raise LimaAiError("shell", "several workspace VMs are running:", stderr_tail="\n".join(tail))
+    choice = menu.choose_vm(rows)
+    if choice is None:
+        raise click.Abort()
+    return choice
 
 
 def start(ws: Workspace) -> None:

@@ -172,10 +172,17 @@ def sync_claude(app: App, project: str, workspace: str) -> None:
     instance.sync_claude(app.workspace(project, workspace))
 
 
-@workspace_command()
+@cli.command()
+@click.argument("project", required=False)
+@click.argument("workspace", required=False)
 @pass_app
-def shell(app: App, project: str, workspace: str) -> None:
-    """Open a shell in the VM's working copy (SSH agent forwarded)."""
+def shell(app: App, project: str | None, workspace: str | None) -> None:
+    """Open a shell in a VM's working copy (SSH agent forwarded); with no arguments, the only running VM or a menu."""
+    if (project is None) != (workspace is None):
+        raise click.UsageError("give both PROJECT and WORKSPACE, or neither to pick from the running VMs")
+    if project is None or workspace is None:
+        app.require("limactl")
+        project, workspace = instance.pick_vm(app.runner, app.interactive)
     instance.open_shell(app.workspace(project, workspace))
 
 
