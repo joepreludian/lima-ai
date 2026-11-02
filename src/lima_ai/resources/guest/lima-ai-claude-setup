@@ -1,0 +1,21 @@
+#!/bin/bash
+# Prepares Claude Code in a workspace VM. lima-ai installs it into ~/.local/bin
+# and runs it after every Claude config copy (`new` and `sync-claude`):
+# - marks onboarding as done in ~/.claude.json, so the token in
+#   ~/.config/lima-ai/env logs claude in without the first-run wizard
+#   (the installer creates ~/.claude.json itself, so the file already exists);
+# - wires rtk into the settings.json and CLAUDE.md just copied from the host:
+#   the PreToolUse hook, ~/.claude/RTK.md and its @RTK.md reference.
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+
+file="$HOME/.claude.json"
+if [ -s "$file" ]; then
+  jq '.hasCompletedOnboarding = true' "$file" > "$file.tmp"
+  mv "$file.tmp" "$file"
+else
+  echo '{"hasCompletedOnboarding": true}' > "$file"
+fi
+chmod 600 "$file"
+
+rtk init -g --auto-patch </dev/null >/dev/null

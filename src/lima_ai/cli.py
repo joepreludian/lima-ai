@@ -4,16 +4,11 @@ from pathlib import Path
 
 import click
 
-from lima_ai import __version__, auth, backup, base, instance
+from lima_ai import __version__, auth, backup, base, doctor, instance, wizard
 from lima_ai.config import Config, load_config
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
 from lima_ai.runner import Runner
-
-TOOL_HINTS = {
-    "limactl": "install Lima: brew install lima",
-    "rsync": "rsync ships with macOS; check your PATH",
-}
 
 
 class LimaAiGroup(click.Group):
@@ -30,7 +25,7 @@ class LimaAiGroup(click.Group):
 
 
 class App:
-    """What every command needs; tests pass their own runner and config."""
+    """What every command needs; tests pass their own runner, config and interactivity."""
 
     def __init__(
         self,
@@ -38,11 +33,20 @@ class App:
         runner: Runner | None = None,
         config: Config | None = None,
         home: Path | None = None,
+        interactive: bool | None = None,
     ):
         self.verbose = verbose
         self._runner = runner
         self._config = config
         self.home = home or Path.home()
+        self._interactive = interactive
+
+    @property
+    def interactive(self) -> bool:
+        """Whether prompts may run: stdin is a terminal, unless a test says otherwise."""
+        if self._interactive is None:
+            self._interactive = sys.stdin.isatty()
+        return self._interactive
 
     @property
     def config(self) -> Config:
@@ -59,11 +63,11 @@ class App:
     def require(self, *tools: str) -> None:
         for tool in tools:
             if shutil.which(tool) is None:
-                raise LimaAiError("preflight", f"{tool} not found on PATH ({TOOL_HINTS[tool]})")
+                raise LimaAiError("preflight", f"{tool} not found on PATH ({doctor.TOOL_HINTS[tool]})")
 
-    def feature(self, project: str, feat: str) -> instance.Feature:
+    def workspace(self, project: str, workspace: str) -> instance.Workspace:
         self.require("limactl")
-        return instance.Feature(self.config, self.runner, self.home, project, feat)
+        return instance.Workspace(self.config, self.runner, self.home, project, workspace)
 
 
 pass_app = click.make_pass_decorator(App)
@@ -90,7 +94,7 @@ def template(app: App) -> None:
 @click.option("--rebuild", is_flag=True, help="Delete and rebuild an existing dev-base.")
 @pass_app
 def base_command(app: App, rebuild: bool) -> None:
-    """Build the golden dev-base VM that feature VMs are cloned from."""
+    """Build the golden dev-base VM that workspace VMs are cloned from."""
     app.require("limactl")
     base.build(app.config, app.runner, rebuild)
 
@@ -109,19 +113,22 @@ def auth_command(app: App, from_stdin: bool) -> None:
     click.echo(f"Token saved to {auth.token_path()}")
 
 
-def feature_command(name: str | None = None, **settings):
-    """A command taking PROJECT FEAT, the way most lima-ai commands do."""
+def workspace_command(name: str | None = None, **settings):
+    """A command taking PROJECT WORKSPACE, the way most lima-ai commands do."""
 
     def decorate(func):
-        func = click.argument("feat")(func)
+        func = click.argument("workspace")(func)
         func = click.argument("project")(func)
         return cli.command(name, **settings)(func)
 
     return decorate
 
 
-@feature_command()
-@click.option("--branch", help="Create and switch to this branch in the VM's working copy.")
+@cli.command()
+@click.argument("project", required=False)
+@click.argument("workspace", required=False)
+@click.option("--branch", help="Git branch to create or switch to in the VM (default: the workspace name).")
+@click.option("--no-branch", is_flag=True, help="Stay on the branch the host has checked out.")
 @click.option(
     "--restore", "restore_from", metavar="BACKUP", help="Restore this backup (under backups_dir) into the VM."
 )
@@ -129,61 +136,80 @@ def feature_command(name: str | None = None, **settings):
 @click.option("--memory", help="Memory in GiB, e.g. 16GiB (default: dev-base's).")
 @click.option("--disk", help="Disk size in GiB, e.g. 100GiB (default: dev-base's).")
 @pass_app
-def new(app: App, project: str, feat: str, branch, restore_from, cpus, memory, disk) -> None:
-    """Create a feature VM for PROJECT (a folder under developer_dir) and FEAT."""
-    app.require("rsync")
-    feature = app.feature(project, feat)
-    after_project = backup.restore_step(feature, restore_from) if restore_from else None
-    instance.new(feature, branch=branch, cpus=cpus, memory=memory, disk=disk, after_project=after_project)
+def new(app: App, project, workspace, branch, no_branch, restore_from, cpus, memory, disk) -> None:
+    """Create a workspace VM for PROJECT (a folder under developer_dir); asks for what is missing."""
+    app.require("rsync", "limactl")
+    created_at = instance.utc_now()  # when the user started, not when they finished answering the prompts
+    request = wizard.fill(app.config, app.runner, app.interactive, project, workspace, branch, no_branch)
+    ws = app.workspace(request.project, request.workspace)
+    after_project = backup.restore_step(ws, restore_from) if restore_from else None
+    instance.new(
+        ws,
+        branch=request.branch,
+        cpus=cpus,
+        memory=memory,
+        disk=disk,
+        after_project=after_project,
+        created_at=created_at,
+    )
+    if app.interactive and click.confirm("Open a shell in it now?", default=True, err=True):
+        sys.exit(instance.open_shell(ws))
 
 
-@feature_command()
+@workspace_command()
 @pass_app
-def sync(app: App, project: str, feat: str) -> None:
+def sync(app: App, project: str, workspace: str) -> None:
     """Copy the host project into the VM again (no deletions)."""
     app.require("rsync")
-    instance.sync(app.feature(project, feat))
+    instance.sync(app.workspace(project, workspace))
 
 
-@feature_command("sync-claude")
+@workspace_command("sync-claude")
 @pass_app
-def sync_claude(app: App, project: str, feat: str) -> None:
+def sync_claude(app: App, project: str, workspace: str) -> None:
     """Push the Claude token, Claude config and git config into the VM again."""
     app.require("rsync")
-    instance.sync_claude(app.feature(project, feat))
+    instance.sync_claude(app.workspace(project, workspace))
 
 
-@feature_command()
+@cli.command()
+@click.argument("project", required=False)
+@click.argument("workspace", required=False)
 @pass_app
-def shell(app: App, project: str, feat: str) -> None:
-    """Open a shell in the VM's working copy (SSH agent forwarded)."""
-    instance.open_shell(app.feature(project, feat))
+def shell(app: App, project: str | None, workspace: str | None) -> None:
+    """Open a shell in a VM's working copy (SSH agent forwarded); with no arguments, the only running VM or a menu."""
+    if (project is None) != (workspace is None):
+        raise click.UsageError("give both PROJECT and WORKSPACE, or neither to pick from the running VMs")
+    if project is None or workspace is None:
+        app.require("limactl")
+        project, workspace = instance.pick_vm(app.runner, app.interactive)
+    instance.open_shell(app.workspace(project, workspace))
 
 
-@feature_command()
+@workspace_command()
 @pass_app
-def start(app: App, project: str, feat: str) -> None:
-    """Start a stopped feature VM."""
-    instance.start(app.feature(project, feat))
+def start(app: App, project: str, workspace: str) -> None:
+    """Start a stopped workspace VM."""
+    instance.start(app.workspace(project, workspace))
 
 
-@feature_command()
+@workspace_command()
 @pass_app
-def stop(app: App, project: str, feat: str) -> None:
-    """Stop a feature VM."""
-    instance.stop(app.feature(project, feat))
+def stop(app: App, project: str, workspace: str) -> None:
+    """Stop a workspace VM."""
+    instance.stop(app.workspace(project, workspace))
 
 
-@feature_command()
+@workspace_command()
 @click.option("--yes", is_flag=True, help="Skip the first confirmation.")
 @click.option("--force", is_flag=True, help="Skip every confirmation, including the one about unsaved work.")
 @pass_app
-def rm(app: App, project: str, feat: str, yes: bool, force: bool) -> None:
-    """Delete a feature VM, after checking it for uncommitted or unpushed work."""
-    instance.remove(app.feature(project, feat), yes=yes, force=force)
+def destroy(app: App, project: str, workspace: str, yes: bool, force: bool) -> None:
+    """Delete a workspace VM, after checking it for uncommitted or unpushed work."""
+    instance.remove(app.workspace(project, workspace), yes=yes, force=force)
 
 
-@feature_command("backup")
+@workspace_command("backup")
 @click.option("--full", is_flag=True, help="Back up the whole Docker daemon instead of this project.")
 @click.option("--no-images", is_flag=True, help="Leave out locally built images.")
 @click.option("--no-external", is_flag=True, help="Leave out the project's external volumes.")
@@ -195,12 +221,12 @@ def rm(app: App, project: str, feat: str, yes: bool, force: bool) -> None:
     help="Compose file, relative to the project root (repeatable, in order); replaces detection.",
 )
 @pass_app
-def backup_command(app: App, project: str, feat: str, full, no_images, no_external, compose_files) -> None:
+def backup_command(app: App, project: str, workspace: str, full, no_images, no_external, compose_files) -> None:
     """Back up the project's Docker volumes and built images from the VM to backups_dir."""
-    backup.run_backup(app.feature(project, feat), full, no_images, no_external, compose_files)
+    backup.run_backup(app.workspace(project, workspace), full, no_images, no_external, compose_files)
 
 
-@feature_command("restore")
+@workspace_command("restore")
 @click.argument("backup_path", metavar="BACKUP")
 @click.option("--overwrite", is_flag=True, help="Empty and refill volumes that already exist in the VM.")
 @click.option("--full", is_flag=True, help="Restore everything in the backup under its recorded names.")
@@ -212,18 +238,30 @@ def backup_command(app: App, project: str, feat: str, full, no_images, no_extern
     help="Compose file, relative to the project root (repeatable, in order); replaces detection.",
 )
 @pass_app
-def restore_command(app: App, project: str, feat: str, backup_path, overwrite, full, compose_files) -> None:
+def restore_command(app: App, project: str, workspace: str, backup_path, overwrite, full, compose_files) -> None:
     """Restore BACKUP (a path under backups_dir) into the VM."""
-    backup.run_restore(app.feature(project, feat), backup_path, overwrite, full, compose_files)
+    backup.run_restore(app.workspace(project, workspace), backup_path, overwrite, full, compose_files)
 
 
-@cli.command("ls")
-@click.option("--port", type=int, help="Port for the URL column (default: app_port).")
+@cli.command("list")
 @pass_app
-def ls(app: App, port: int | None) -> None:
-    """List feature VMs with their mDNS name, IP and app URL."""
+def list_command(app: App) -> None:
+    """List workspace VMs with their project, status, branch and FQDN."""
     app.require("limactl")
-    instance.list_vms(app.runner, port or app.config.app_port)
+    instance.list_vms(app.runner)
+
+
+cli.add_command(list_command, "ls")
+
+
+@cli.command("doctor")
+@pass_app
+def doctor_command(app: App) -> None:
+    """Check that this machine has everything lima-ai needs."""
+    checks = doctor.run_checks(app.runner)
+    click.echo(doctor.render(checks), nl=False)
+    if any(check.status == "fail" for check in checks):
+        sys.exit(1)
 
 
 def main() -> None:

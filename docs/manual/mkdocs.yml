@@ -1,5 +1,5 @@
 site_name: lima-ai
-site_description: Disposable Lima VMs for running Claude Code agents in parallel, one feature per VM
+site_description: Disposable Lima VMs for running Claude Code agents in parallel, one workspace per VM
 site_url: https://lima-ai.readthedocs.io/
 site_author: Jon Trigueiro
 copyright: Copyright &copy; 2026 Jon Trigueiro — GPLv3 or later

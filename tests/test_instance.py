@@ -1,11 +1,17 @@
+import contextlib
+import dataclasses
 import json
+import re
+import tempfile
 
-from lima_ai.config import state_dir
-from tests.conftest import GUEST_HOME
+from lima_ai import instance, menu, wizard
+from lima_ai.config import SyncConfig, config_dir, state_dir
+from tests.conftest import CARD, GUEST_HOME
 from tests.fakes import lima_list
 
 INSTANCE = "dev-myapp-feat-a"
 WORKDIR = f"{GUEST_HOME}/work/myapp"
+CREATED_AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 
 def base_then_clone(env, clone_status="Running"):
@@ -20,6 +26,49 @@ def existing(env, status="Running"):
 
 def index_of(commands, prefix):
     return next(i for i, c in enumerate(commands) if c.startswith(prefix))
+
+
+OPENSSH_KEY = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----\n"
+
+
+def with_ssh_keys(env, *names):
+    ssh = env.home / ".ssh"
+    ssh.mkdir()
+    (ssh / "known_hosts").write_text("github.com ssh-ed25519 AAAA\n")
+    (ssh / "config").write_text("Host github.com\n")
+    for name in names:
+        (ssh / name).write_text(OPENSSH_KEY)
+
+
+def keep_git_staging(env, monkeypatch):
+    """Make the git staging dir outlive the push so tests can look inside it."""
+    staging = env.tmp_path / "git-staging"
+    real = tempfile.TemporaryDirectory
+
+    @contextlib.contextmanager
+    def fake_tempdir(prefix):
+        if not prefix.startswith("lima-ai-git-"):
+            with real(prefix=prefix) as tmp:
+                yield tmp
+            return
+        staging.mkdir()
+        yield str(staging)
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", fake_tempdir)
+    return staging
+
+
+def staged_ssh_names(staging):
+    ssh = staging / ".ssh"
+    return sorted(p.name for p in ssh.iterdir()) if ssh.exists() else []
+
+
+def set_ssh_keys(env, value):
+    env.cfg = dataclasses.replace(env.cfg, sync=SyncConfig(ssh_keys=value))
+
+
+def saved_config():
+    return (config_dir() / "config.toml").read_text()
 
 
 # --- new -------------------------------------------------------------------
@@ -72,22 +121,185 @@ def test_new_passes_resource_overrides_to_clone(env):
     assert f"limactl clone --tty=false dev-base {INSTANCE} --cpus 2 --memory 4 --disk 80" in env.runner.commands
 
 
-def test_new_prints_summary_with_mdns_ip_and_url(env):
+def test_new_prints_the_card_from_the_vm_and_how_to_open_it(env):
     env.write_token()
     base_then_clone(env)
     result = env.invoke(["new", "preludian/myapp", "feat-a"])
-    assert f"lima-{INSTANCE}.local" in result.output
-    assert "192.168.64.8" in result.output
-    assert f"http://lima-{INSTANCE}.local:8002" in result.output
-    assert "lima-ai shell preludian/myapp feat-a" in result.output
+    assert result.exit_code == 0, result.output
+    assert env.runner.find(f"limactl shell {INSTANCE} bash -c 'exec ~/.local/bin/lima-ai-info'")
+    # The card is printed as the VM produced it; the host adds nothing about the VM around it.
+    assert result.stdout == CARD + "Open it with: lima-ai shell preludian/myapp feat-a\n"
+    assert "mDNS" not in result.output
 
 
-def test_new_records_instance_for_ls(env):
+def test_hints_quote_a_project_path_with_spaces(env):
+    ws = instance.Workspace(env.cfg, env.runner, env.home, "preludian/my app", "feat-a")
+    assert ws.hint("shell") == "lima-ai shell 'preludian/my app' feat-a"
+
+
+def test_new_takes_created_at_before_asking_anything(env, monkeypatch):
+    env.write_token()
+    base_then_clone(env)
+    clock = ["2026-11-01T14:00:00Z"]
+    monkeypatch.setattr(instance, "utc_now", lambda: clock[0])
+    ask_branch = wizard.ask_branch
+
+    def slow_answer(workspace):  # the user spends time at the prompt
+        clock[0] = "2026-11-01T14:05:00Z"
+        return ask_branch(workspace)
+
+    monkeypatch.setattr(wizard, "ask_branch", slow_answer)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
+    assert record["created_at"] == "2026-11-01T14:00:00Z"
+    assert "LIMA_AI_CREATED_AT=2026-11-01T14:00:00Z\n" in instance_file_pushes(env)[0].input
+
+
+def test_new_card_failure_keeps_the_vm_and_points_at_sync_claude(env):
+    env.write_token()
+    base_then_clone(env)
+    env.runner.on("exec ~/.local/bin/lima-ai-info", returncode=1, stderr="bash: lima-ai-info: No such file")
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 1
+    assert "error [info]" in result.output
+    assert f"{INSTANCE} is kept" in result.output
+    assert "lima-ai sync-claude preludian/myapp feat-a" in result.output
+
+
+def info_script_pushes(env):
+    return [c for c in env.runner.calls if c.input and "hostname" in c.input and "lima-ai-info" in c.command]
+
+
+def test_new_installs_the_guest_info_script(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    pushes = info_script_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "~/.local/bin/lima-ai-info" in pushes[0].command
+    assert "chmod 755" in pushes[0].command
+
+
+def prompt_pushes(env):
+    return [c for c in env.runner.calls if c.input and "l-ai" in c.input and "prompt.sh" in c.command]
+
+
+def test_new_installs_the_prompt_and_hooks_it_into_bashrc(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    pushes = prompt_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "~/.config/lima-ai/prompt.sh" in pushes[0].command
+    assert "~/.bashrc" in pushes[0].command
+
+
+def claude_setup_pushes(env):
+    return [
+        c
+        for c in env.runner.calls
+        if c.input and "hasCompletedOnboarding" in c.input and "rtk init -g --auto-patch" in c.input
+    ]
+
+
+def test_new_sets_up_claude_after_copying_its_config(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    pushes = claude_setup_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "~/.local/bin/lima-ai-claude-setup" in pushes[0].command
+    assert "chmod 755" in pushes[0].command
+    cmds = env.runner.commands
+    assert index_of(cmds, "rsync -a --copy-unsafe-links") < cmds.index(pushes[0].command)
+
+
+def test_sync_claude_sets_up_claude_too(env):
+    env.write_token()
+    existing(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert len(claude_setup_pushes(env)) == 1
+
+
+def test_sync_claude_installs_the_prompt_too(env):
+    env.write_token()
+    existing(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert len(prompt_pushes(env)) == 1
+
+
+def test_new_records_instance_for_list(env):
     env.write_token()
     base_then_clone(env)
     env.invoke(["new", "preludian/myapp", "feat-a"])
     record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
-    assert record == {"project": "preludian/myapp", "slug": "myapp", "feat": "feat-a"}
+    assert record.keys() == {"project", "slug", "workspace", "created_at"}
+    assert (record["project"], record["slug"], record["workspace"]) == ("preludian/myapp", "myapp", "feat-a")
+    assert CREATED_AT.fullmatch(record["created_at"])
+
+
+def instance_file_pushes(env):
+    return [c for c in env.runner.calls if c.input and c.input.startswith("LIMA_AI_PROJECT=")]
+
+
+def test_new_writes_the_instance_file_into_the_vm(env):
+    env.write_token()
+    base_then_clone(env)
+    env.invoke(["new", "preludian/myapp", "feat-a"])
+    record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
+    pushes = instance_file_pushes(env)
+    assert len(pushes) == 1
+    assert pushes[0].argv[:3] == ["limactl", "shell", INSTANCE]
+    assert "umask 077" in pushes[0].command
+    assert "cat > ~/.config/lima-ai/instance" in pushes[0].command
+    assert pushes[0].input == (
+        "LIMA_AI_PROJECT=preludian/myapp\nLIMA_AI_WORKSPACE=feat-a\nLIMA_AI_WORKDIR=work/myapp\n"
+        f"LIMA_AI_CREATED_AT={record['created_at']}\n"
+    )
+
+
+def test_sync_claude_leaves_an_existing_instance_file_alone(env):
+    env.write_token()
+    existing(env)
+    env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert env.runner.find("test -f ~/.config/lima-ai/instance")
+    assert instance_file_pushes(env) == []
+
+
+def test_sync_claude_writes_a_missing_instance_file_from_the_record(env):
+    env.write_token()
+    existing(env)
+    env.runner.on("test -f ~/.config/lima-ai/instance", returncode=1)
+    (state_dir() / "instances").mkdir(parents=True)
+    (state_dir() / f"instances/{INSTANCE}.json").write_text(
+        json.dumps(
+            {"project": "preludian/myapp", "slug": "myapp", "workspace": "feat-a", "created_at": "2026-11-01T14:03:22Z"}
+        )
+    )
+    env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    pushes = instance_file_pushes(env)
+    assert len(pushes) == 1
+    assert "LIMA_AI_CREATED_AT=2026-11-01T14:03:22Z\n" in pushes[0].input
+
+
+def test_sync_claude_writes_unknown_created_at_when_the_record_predates_it(env):
+    env.write_token()
+    existing(env)
+    env.runner.on("test -f ~/.config/lima-ai/instance", returncode=1)
+    env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    pushes = instance_file_pushes(env)
+    assert len(pushes) == 1
+    assert "LIMA_AI_CREATED_AT=unknown\n" in pushes[0].input
+    assert "LIMA_AI_PROJECT=preludian/myapp\n" in pushes[0].input
 
 
 def test_new_creates_backups_dir(env):
@@ -165,7 +377,7 @@ def test_new_failure_after_clone_keeps_vm_and_suggests_next_steps(env):
     assert "error [sync]" in result.output
     assert f"{INSTANCE} is kept" in result.output
     assert "lima-ai sync preludian/myapp feat-a" in result.output
-    assert "lima-ai rm preludian/myapp feat-a" in result.output
+    assert "lima-ai destroy preludian/myapp feat-a" in result.output
     assert not env.runner.find("limactl delete")
 
 
@@ -212,6 +424,92 @@ def test_sync_claude_pushes_token_claude_and_git(env):
     assert [c for c in env.runner.calls if c.input and "CLAUDE_CODE_OAUTH_TOKEN" in c.input]
     assert env.runner.find("--copy-unsafe-links")
     assert not env.runner.find("--exclude-from=")
+    assert len(info_script_pushes(env)) == 1
+
+
+# --- SSH private keys ---------------------------------------------------------------
+
+
+def test_sync_claude_asks_before_copying_keys_and_remembers_yes(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519", "work.key")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert "id_ed25519, work.key" in result.output
+    assert staged_ssh_names(staging) == ["id_ed25519", "known_hosts", "work.key"]
+    assert saved_config() == "[sync]\nssh_keys = true\n"
+    assert str(config_dir() / "config.toml") in result.output
+
+
+def test_sync_claude_remembers_no_and_keeps_keys_out(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"], input="n\n")
+    assert result.exit_code == 0, result.output
+    assert staged_ssh_names(staging) == ["known_hosts"]
+    assert saved_config() == "[sync]\nssh_keys = false\n"
+
+
+def test_sync_claude_default_answer_is_no(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"], input="\n")
+    assert result.exit_code == 0, result.output
+    assert staged_ssh_names(staging) == ["known_hosts"]
+    assert saved_config() == "[sync]\nssh_keys = false\n"
+
+
+def test_sync_claude_follows_a_saved_yes_without_asking(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    set_ssh_keys(env, True)
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[y/N]" not in result.output
+    assert staged_ssh_names(staging) == ["id_ed25519", "known_hosts"]
+    assert not (config_dir() / "config.toml").exists()
+
+
+def test_sync_claude_follows_a_saved_no_without_asking(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env, "id_ed25519")
+    set_ssh_keys(env, False)
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[y/N]" not in result.output
+    assert staged_ssh_names(staging) == ["known_hosts"]
+
+
+def test_sync_claude_does_not_ask_when_there_are_no_keys(env, monkeypatch):
+    env.write_token()
+    existing(env)
+    with_ssh_keys(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[y/N]" not in result.output
+    assert not (config_dir() / "config.toml").exists()
+
+
+def test_new_asks_about_keys_before_cloning(env, monkeypatch):
+    env.write_token()
+    base_then_clone(env)
+    with_ssh_keys(env, "id_ed25519")
+    staging = keep_git_staging(env, monkeypatch)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert result.output.index("[y/N]") < result.output.index("Cloning dev-base")
+    assert staged_ssh_names(staging) == ["id_ed25519", "known_hosts"]
+    assert saved_config() == "[sync]\nssh_keys = true\n"
 
 
 def test_shell_opens_interactive_shell_in_workdir(env):
@@ -221,6 +519,94 @@ def test_shell_opens_interactive_shell_in_workdir(env):
     call = env.runner.find(f"limactl shell --workdir {WORKDIR} {INSTANCE}")[0]
     assert call.argv[-1] == INSTANCE
     assert call.interactive
+
+
+OTHER = "dev-thing-b"
+
+
+def write_record(name: str, project: str, slug: str, workspace: str) -> None:
+    folder = state_dir() / "instances"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{name}.json").write_text(json.dumps({"project": project, "slug": slug, "workspace": workspace}))
+
+
+def two_running(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Running"), (OTHER, "Running")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    write_record(OTHER, "other/thing", "thing", "b")
+
+
+def test_shell_without_arguments_opens_the_only_running_vm(env):
+    three_vms(env)  # dev-base stopped, INSTANCE running, OTHER stopped, `default` running
+    result = env.invoke(["shell"])
+    assert result.exit_code == 0, result.output
+    assert env.runner.find(f"limactl shell --workdir {WORKDIR} {INSTANCE}")[0].interactive
+
+
+def test_shell_without_arguments_ignores_vms_that_are_not_workspaces(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Running"), ("default", "Running")))
+    result = env.invoke(["shell"])
+    assert result.exit_code == 1
+    assert "no running workspace VMs" in result.output
+
+
+def test_shell_without_arguments_errors_and_lists_stopped_vms_when_none_runs(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Stopped"), (OTHER, "Stopped")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    write_record(OTHER, "other/thing", "thing", "b")
+    result = env.invoke(["shell"])
+    assert result.exit_code == 1
+    assert "error [shell]: no running workspace VMs; start one with `lima-ai start PROJECT WORKSPACE`" in result.output
+    assert "preludian/myapp  feat-a  Stopped" in result.output
+    assert "other/thing      b       Stopped" in result.output
+    assert not env.runner.find("limactl shell")
+
+
+def test_shell_without_arguments_skips_vms_without_a_record(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Running"), (OTHER, "Running")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    result = env.invoke(["shell"])
+    assert result.exit_code == 0, result.output
+    assert env.runner.find(f"limactl shell --workdir {WORKDIR} {INSTANCE}")
+    assert not env.runner.find(f"limactl shell --workdir {GUEST_HOME}/work/thing")
+
+
+def test_shell_without_arguments_prints_the_list_when_stdin_is_not_a_terminal(env):
+    two_running(env)
+    result = env.invoke(["shell"], interactive=False)
+    assert result.exit_code == 1
+    assert "several workspace VMs are running:" in result.output
+    assert result.output.splitlines()[1].split()[:5] == ["PROJECT", "WORKSPACE", "STATUS", "BRANCH", "FQDN"]
+    assert "preludian/myapp" in result.output and "other/thing" in result.output
+    assert "open one with: lima-ai shell PROJECT WORKSPACE" in result.output
+    assert not env.runner.find("limactl shell --workdir")
+
+
+def test_shell_without_arguments_opens_the_vm_picked_in_the_menu(env, monkeypatch):
+    two_running(env)
+    seen = []
+    monkeypatch.setattr(menu, "choose_vm", lambda rows: seen.append(rows) or ("other/thing", "b"))
+    result = env.invoke(["shell"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert [(r.project, r.workspace, r.status) for r in seen[0]] == [
+        ("preludian/myapp", "feat-a", "Running"),
+        ("other/thing", "b", "Running"),
+    ]
+    assert env.runner.find(f"limactl shell --workdir {GUEST_HOME}/work/thing {OTHER}")[0].interactive
+
+
+def test_shell_without_arguments_aborts_when_the_menu_is_cancelled(env, monkeypatch):
+    two_running(env)
+    monkeypatch.setattr(menu, "choose_vm", lambda rows: None)
+    result = env.invoke(["shell"], interactive=True)
+    assert result.exit_code == 1
+    assert not env.runner.find("limactl shell --workdir")
+
+
+def test_shell_with_one_argument_is_a_usage_error(env):
+    result = env.invoke(["shell", "preludian/myapp"])
+    assert result.exit_code == 2
+    assert "both PROJECT and WORKSPACE" in result.output
 
 
 def test_start_and_stop(env):
@@ -245,41 +631,68 @@ def test_commands_work_after_host_project_folder_is_gone(env):
     assert "no VM named dev-deleted-feat-a" in result.output
 
 
-# --- ls ---------------------------------------------------------------------------
+# --- list ---------------------------------------------------------------------------
 
 
-def test_ls_lists_feature_vms_but_not_base(env):
+def three_vms(env):
     env.runner.on(
         "limactl list --json",
         lima_list(
             ("dev-base", "Stopped"), (INSTANCE, "Running"), ("dev-other-thing-b", "Stopped"), ("default", "Running")
         ),
     )
+    env.runner.on(f"limactl shell {INSTANCE} git -C {WORKDIR} rev-parse HEAD", "0123456789abcdef\n")
+    env.runner.on(f"limactl shell {INSTANCE} git -C {WORKDIR} symbolic-ref -q --short HEAD", "feat-a-work\n")
     (state_dir() / "instances").mkdir(parents=True)
     (state_dir() / f"instances/{INSTANCE}.json").write_text(
-        json.dumps({"project": "preludian/myapp", "slug": "myapp", "feat": "feat-a"})
+        json.dumps({"project": "preludian/myapp", "slug": "myapp", "workspace": "feat-a"})
     )
-    result = env.invoke(["ls", "--port", "3000"])
+
+
+def test_list_shows_project_workspace_status_branch_and_fqdn(env):
+    three_vms(env)
+    result = env.invoke(["list"])
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0].split() == ["PROJECT", "FEAT", "STATUS", "MDNS", "IP", "URL"]
-    assert lines[1].split() == [
-        "myapp",
-        "feat-a",
-        "Running",
-        f"lima-{INSTANCE}.local",
-        "192.168.64.8",
-        f"http://lima-{INSTANCE}.local:3000",
-    ]
-    assert lines[2].split() == ["?", "other-thing-b", "Stopped", "lima-dev-other-thing-b.local", "-", "-"]
+    assert lines[0].split() == ["PROJECT", "WORKSPACE", "STATUS", "BRANCH", "FQDN"]
+    assert lines[1].split() == ["preludian/myapp", "feat-a", "Running", "feat-a-work", f"lima-{INSTANCE}.local"]
+    assert lines[2].split() == ["?", "other-thing-b", "Stopped", "-", "lima-dev-other-thing-b.local"]
     assert len(lines) == 3
 
 
-def test_ls_with_no_vms(env):
+def test_list_reads_records_written_before_the_workspace_rename(env):
+    three_vms(env)
+    (state_dir() / f"instances/{INSTANCE}.json").write_text(
+        json.dumps({"project": "preludian/myapp", "slug": "myapp", "feat": "feat-a"})
+    )
+    result = env.invoke(["list"])
+    assert result.output.splitlines()[1].split()[:2] == ["preludian/myapp", "feat-a"]
+
+
+def test_list_does_not_shell_into_stopped_vms(env):
+    three_vms(env)
+    env.invoke(["list"])
+    assert not env.runner.find("limactl shell dev-other-thing-b")
+
+
+def test_list_shows_no_branch_when_the_workdir_is_not_a_repository(env):
+    three_vms(env)
+    env.runner.on(f"limactl shell {INSTANCE} git -C {WORKDIR} rev-parse HEAD", "", returncode=128)
+    result = env.invoke(["list"])
+    assert result.output.splitlines()[1].split()[3] == "-"
+
+
+def test_ls_is_an_alias_for_list(env):
+    three_vms(env)
+    assert env.invoke(["ls"]).output == env.invoke(["list"]).output
+
+
+def test_list_with_no_vms(env):
     env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped")))
-    result = env.invoke(["ls"])
+    result = env.invoke(["list"])
     assert result.exit_code == 0
-    assert "no feature VMs" in result.output
+    assert "no workspace VMs" in result.output
+    assert "lima-ai new" in result.output
 
 
 # --- rm ---------------------------------------------------------------------------
@@ -288,14 +701,14 @@ def test_ls_with_no_vms(env):
 def test_rm_clean_running_vm_with_yes_deletes_without_asking(env):
     existing(env)
     env.runner.on("@{u}..", "")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"])
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"])
     assert result.exit_code == 0, result.output
     assert f"limactl delete -f {INSTANCE}" in env.runner.commands
 
 
 def test_rm_asks_once_without_yes(env):
     existing(env)
-    result = env.invoke(["rm", "preludian/myapp", "feat-a"], input="n\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a"], input="n\n")
     assert result.exit_code == 1
     assert not env.runner.find("limactl delete")
 
@@ -303,11 +716,11 @@ def test_rm_asks_once_without_yes(env):
 def test_rm_dirty_vm_asks_second_confirmation_even_with_yes(env):
     existing(env)
     env.runner.on("status --porcelain", "?? notes.txt\n")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"], input="n\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"], input="n\n")
     assert result.exit_code == 1
     assert "notes.txt" in result.output
     assert not env.runner.find("limactl delete")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"], input="y\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"], input="y\n")
     assert result.exit_code == 0
     assert env.runner.find("limactl delete")
 
@@ -316,7 +729,7 @@ def test_rm_unpushed_commits_without_upstream_checks_all_local_commits(env):
     existing(env)
     env.runner.on("@{u}..", returncode=128, stderr="fatal: no upstream configured")
     env.runner.on("log --oneline HEAD --not --remotes", "abc123 wip: login form\n")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"], input="n\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"], input="n\n")
     assert result.exit_code == 1
     assert "abc123 wip: login form" in result.output
     assert not env.runner.find("limactl delete")
@@ -325,14 +738,14 @@ def test_rm_unpushed_commits_without_upstream_checks_all_local_commits(env):
 def test_rm_force_skips_both_confirmations(env):
     existing(env)
     env.runner.on("status --porcelain", " M app.py\n")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--force"])
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--force"])
     assert result.exit_code == 0, result.output
     assert env.runner.find("limactl delete")
 
 
 def test_rm_stopped_vm_cannot_check_work_and_asks_once(env):
     existing(env, status="Stopped")
-    result = env.invoke(["rm", "preludian/myapp", "feat-a"], input="y\n")
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a"], input="y\n")
     assert result.exit_code == 0
     assert "stopped" in result.output
     assert not env.runner.find("status --porcelain")
@@ -342,7 +755,7 @@ def test_rm_stopped_vm_cannot_check_work_and_asks_once(env):
 def test_rm_missing_workdir_is_not_unsaved_work(env):
     existing(env)
     env.runner.on(f"test -d {WORKDIR}", returncode=1)
-    result = env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"])
+    result = env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"])
     assert result.exit_code == 0, result.output
     assert env.runner.find("limactl delete")
 
@@ -352,7 +765,7 @@ def test_rm_forgets_instance_record(env):
     (state_dir() / "instances").mkdir(parents=True)
     record = state_dir() / f"instances/{INSTANCE}.json"
     record.write_text("{}")
-    env.invoke(["rm", "preludian/myapp", "feat-a", "--yes"])
+    env.invoke(["destroy", "preludian/myapp", "feat-a", "--yes"])
     assert not record.exists()
 
 

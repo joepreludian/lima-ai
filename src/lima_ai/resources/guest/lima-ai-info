@@ -1,0 +1,55 @@
+#!/bin/bash
+# Prints this VM's connection card. lima-ai installs it into ~/.local/bin of
+# every workspace VM and runs it at the end of `lima-ai new`; it is the one
+# place that formats these details.
+set -euo pipefail
+
+file="$HOME/.config/lima-ai/instance"
+if [ ! -f "$file" ]; then
+  echo "lima-ai-info: no instance file; run lima-ai sync-claude from the host" >&2
+  exit 1
+fi
+. "$file"
+
+fqdn="$(hostname).local"
+ip="$( (ip -4 -o addr show lima0 2>/dev/null || true) | sed -nE 's/.*inet ([0-9.]+)\/.*/\1/p' | head -n 1)"
+ip="${ip:-unknown}"
+
+# The working copy counts as a repository only when it is the top level of
+# one: git would otherwise walk up and find a repository above it.
+workdir="$HOME/$LIMA_AI_WORKDIR"
+if prefix="$(git -C "$workdir" rev-parse --show-prefix 2>/dev/null)" && [ -z "$prefix" ]; then
+  branch="$(git -C "$workdir" symbolic-ref -q --short HEAD || echo '(detached HEAD)')"
+else
+  branch="no git repository"
+fi
+
+title="LIMA-AI - Instance Details"
+rows=(
+  "Project:    $LIMA_AI_PROJECT"
+  "Workspace:  $LIMA_AI_WORKSPACE"
+  "FQDN:       $fqdn"
+  "IP:         $ip"
+  "Created at: $LIMA_AI_CREATED_AT"
+  "Git branch: $branch"
+)
+
+width=${#title}
+for row in "${rows[@]}"; do
+  if [ "${#row}" -gt "$width" ]; then width=${#row}; fi
+done
+edge="+$(printf '%*s' "$((width + 2))" '' | tr ' ' '-')+"
+
+# printf's %-*s pads by bytes while ${#row} counts characters, so a row with
+# accented letters would come out short; pad by the character count instead.
+line() {
+  printf '| %s%*s |\n' "$1" "$((width - ${#1}))" ''
+}
+
+echo "$edge"
+line "$title"
+echo "$edge"
+for row in "${rows[@]}"; do
+  line "$row"
+done
+echo "$edge"

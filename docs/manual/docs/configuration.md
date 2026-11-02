@@ -7,7 +7,6 @@ go unnoticed.
 ```toml
 developer_dir = "~/Developer"                 # where <project> paths start
 backups_dir   = "~/Developer/backups/docker"  # mounted read-write in every VM
-app_port      = 8002                          # used for the URLs lima-ai prints
 
 [vm]                                          # dev-base defaults; new --cpus/--memory/--disk override per VM
 cpus   = 4
@@ -24,6 +23,7 @@ docker_backup_sha256 = "9c7bdf7c25d4f8c19253a3ffd73bfd34e2d8d4f6e1cd7736b27feffb
 
 [sync]
 extra_excludes = ["*.sqlite3"]                # added to the project rsync excludes
+ssh_keys = false                              # copy ~/.ssh private keys into VMs; unset = ask once and save the answer
 ```
 
 Mounts, VM defaults and tool versions are fixed when `dev-base` is built.
@@ -37,7 +37,7 @@ Files lima-ai keeps on your Mac:
 | `~/.config/lima-ai/oauth-token` | Claude token (mode 600) |
 | `~/.config/lima-ai/config.toml` | optional settings |
 | `~/.local/state/lima-ai/base/` | the rendered `dev-base` template and its provision scripts |
-| `~/.local/state/lima-ai/instances/` | which project and feature each VM belongs to, for `ls` |
+| `~/.local/state/lima-ai/instances/` | which project and workspace each VM belongs to, and when it was created, for `list` |
 | `~/Developer/backups/docker/` | Docker backups |
 
 `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are respected when set.

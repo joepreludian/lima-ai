@@ -7,7 +7,7 @@ marker="/var/lib/lima-ai/10-system.done"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y build-essential pkg-config libssl-dev git rsync jq curl unzip \
-  tmux ripgrep avahi-daemon libnss-mdns
+  tmux ripgrep fzf lazygit avahi-daemon libnss-mdns
 
 # eth0 is Lima's user-mode network, identical in every VM; only lima0 (vzNAT)
 # carries the VM's own address.

@@ -9,6 +9,15 @@ from lima_ai.config import Config
 from tests.fakes import FakeRunner
 
 GUEST_HOME = "/home/jon.linux"
+# What the fake VM answers to lima-ai-info: the host must print it untouched.
+CARD = (
+    "+-----------------------------+\n"
+    "| LIMA-AI - Instance Details  |\n"
+    "+-----------------------------+\n"
+    "| Project:    preludian/myapp |\n"
+    "| IP:         192.168.64.8    |\n"
+    "+-----------------------------+\n"
+)
 
 
 @pytest.fixture
@@ -26,6 +35,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{stubs}:{os.environ['PATH']}")
     developer = tmp_path / "Developer"
     (developer / "preludian/myapp").mkdir(parents=True)
+    (developer / "preludian/myapp/.git").mkdir()
     home = tmp_path / "home"
     (home / ".claude").mkdir(parents=True)
     (home / ".claude/CLAUDE.md").write_text("# rules\n")
@@ -41,10 +51,11 @@ class Env:
         self.runner = FakeRunner()
         self.runner.on("printenv HOME", GUEST_HOME + "\n")
         self.runner.on("rsync --version", "openrsync: protocol version 29\n")
-        self.runner.on("ip -4 -o addr show lima0", "3: lima0    inet 192.168.64.8/24 metric 100 brd 192.168.64.255\n")
+        self.runner.on("rev-parse --verify --quiet refs/heads/", returncode=1)
+        self.runner.on("exec ~/.local/bin/lima-ai-info", CARD)
 
-    def invoke(self, args: list[str], input: str | None = None):
-        app = App(runner=self.runner, config=self.cfg, home=self.home)
+    def invoke(self, args: list[str], input: str | None = None, interactive: bool = False):
+        app = App(runner=self.runner, config=self.cfg, home=self.home, interactive=interactive)
         return CliRunner().invoke(cli, args, input=input, obj=app)
 
     def write_token(self, token: str = "sk-ant-oat01-secret") -> None:

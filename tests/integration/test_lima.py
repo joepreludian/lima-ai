@@ -29,8 +29,8 @@ FIXTURE = Path(__file__).parent / "fixture"
 PROJECT = "limaaitest"
 OTHER_PROJECT = "limaaitest2"
 INSTANCES = [f"dev-{PROJECT}-a", f"dev-{PROJECT}-b", f"dev-{PROJECT}-c", f"dev-{OTHER_PROJECT}-d"]
-# click's and docker-backup's confirmation prompts.
-PROMPT = re.compile(r"\[y/N\]")
+# click's confirmations: docker-backup's and destroy's [y/N], and new's shell offer [Y/n].
+PROMPT = re.compile(r"\[(y/N|Y/n)\]")
 
 
 class Lab:
@@ -65,7 +65,8 @@ class Lab:
         """Run lima-ai on a pty; with confirm, answer each [y/N] prompt with y as it appears.
 
         Answers written before a prompt is shown are lost to the pty, so this
-        reads the output as it comes instead of piping answers up front.
+        reads the output as it comes instead of piping answers up front. The
+        [Y/n] shell offer at the end of `new` is always declined.
         """
         command = ["script", "-q", "/dev/null", sys.executable, "-m", "lima_ai", *args]
         proc = subprocess.Popen(
@@ -81,9 +82,10 @@ class Lab:
                 if not chunk:
                     break
                 output += chunk
-                prompts = len(PROMPT.findall(output.decode(errors="replace")))
-                while answered < prompts:
-                    proc.stdin.write(b"y\n" if confirm else b"n\n")
+                prompts = PROMPT.findall(output.decode(errors="replace"))
+                while answered < len(prompts):
+                    yes = confirm and prompts[answered] == "y/N"  # never open a shell from a test
+                    proc.stdin.write(b"y\n" if yes else b"n\n")
                     proc.stdin.flush()
                     answered += 1
             if time.monotonic() > deadline:
@@ -157,22 +159,33 @@ def test_base_is_built_verified_and_sealed(lab):
 
 
 def test_two_clones_serve_their_own_content_on_the_same_port(lab):
-    for feat in ("a", "b"):
-        lab.cli("new", PROJECT, feat)
-        instance = f"dev-{PROJECT}-{feat}"
+    for workspace in ("a", "b"):
+        instance = f"dev-{PROJECT}-{workspace}"
+        # The fixture has no git, so --no-branch changes nothing in the VM; it exercises the flag's path.
+        output = lab.cli("new", PROJECT, workspace, "--no-branch")
+        assert "LIMA-AI - Instance Details" in output
+        assert f"| Project:    {PROJECT}" in output
+        assert f"| Workspace:  {workspace}" in output
+        assert f"| FQDN:       lima-{instance}.local" in output
+        assert "| Git branch: no git repository" in output
+        assert f"Open it with: lima-ai shell {PROJECT} {workspace}" in output
         lab.compose(
             instance,
             PROJECT,
             f"BUILD_ID={lab.build_id} docker compose up -d --build && "
-            f"docker compose exec -T web sh -c 'echo clone-{feat} > /data/index.html'",
+            f"docker compose exec -T web sh -c 'echo clone-{workspace} > /data/index.html'",
         )
     ip_a = socket.gethostbyname(f"lima-dev-{PROJECT}-a.local")
     ip_b = socket.gethostbyname(f"lima-dev-{PROJECT}-b.local")
     assert ip_a != ip_b
     assert served(f"dev-{PROJECT}-a") == "clone-a"
     assert served(f"dev-{PROJECT}-b") == "clone-b"
-    ls = lab.cli("ls")
-    assert f"lima-dev-{PROJECT}-a.local" in ls and ip_a in ls
+    listing = lab.cli("list")
+    assert f"lima-dev-{PROJECT}-a.local" in listing
+    card = lab.vm(f"dev-{PROJECT}-a", '"$HOME/.local/bin/lima-ai-info"')
+    assert f"| FQDN:       lima-dev-{PROJECT}-a.local" in card
+    assert "| Workspace:  a" in card
+    assert "| Git branch: no git repository" in card
 
 
 def test_clone_has_the_full_toolchain(lab):
@@ -219,6 +232,6 @@ def test_full_backup_round_trip(lab):
 
 
 def test_rm_deletes_the_vm(lab):
-    lab.cli("rm", OTHER_PROJECT, "d", "--force")
+    lab.cli("destroy", OTHER_PROJECT, "d", "--force")
     listed = subprocess.run(["limactl", "list", "--json"], env=lab.env, capture_output=True, text=True)
     assert f"dev-{OTHER_PROJECT}-d" not in listed.stdout

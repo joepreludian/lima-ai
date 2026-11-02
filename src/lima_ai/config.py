@@ -1,5 +1,6 @@
 import dataclasses
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,13 +29,14 @@ class Versions:
 @dataclass(frozen=True)
 class SyncConfig:
     extra_excludes: tuple[str, ...] = ()
+    # None: ask before copying ~/.ssh private keys into a VM, then remember the answer here.
+    ssh_keys: bool | None = None
 
 
 @dataclass(frozen=True)
 class Config:
     developer_dir: Path = Path("~/Developer")
     backups_dir: Path = Path("~/Developer/backups/docker")
-    app_port: int = 8002
     vm: VmConfig = field(default_factory=VmConfig)
     versions: Versions = field(default_factory=Versions)
     sync: SyncConfig = field(default_factory=SyncConfig)
@@ -99,6 +101,8 @@ def _check_type(default: Any, value: Any, key: str, path: Path) -> Any:
     elif isinstance(default, tuple):
         ok = isinstance(value, list) and all(isinstance(item, str) for item in value)
         value = tuple(value) if ok else value
+    elif default is None:
+        ok = isinstance(value, bool)
     elif isinstance(default, bool) or isinstance(value, bool):
         ok = type(value) is type(default)
     else:
@@ -109,8 +113,41 @@ def _check_type(default: Any, value: Any, key: str, path: Path) -> Any:
 
 
 def _type_name(default: Any) -> str:
+    if default is None:
+        return "true or false"
     if isinstance(default, Path):
         return "a path string"
     if isinstance(default, tuple):
         return "a list of strings"
     return {int: "an integer", str: "a string"}.get(type(default), type(default).__name__)
+
+
+_SYNC_HEADER = re.compile(r"^\s*\[\s*sync\s*\]", re.MULTILINE)
+_ANY_HEADER = re.compile(r"^\s*\[", re.MULTILINE)
+_SSH_KEYS_LINE = re.compile(r"^\s*ssh_keys\s*=.*$", re.MULTILINE)
+
+
+def save_ssh_keys(value: bool, path: Path | None = None) -> Path:
+    """Write `ssh_keys = true|false` under [sync] in config.toml, keeping everything else as written."""
+    path = path or config_dir() / "config.toml"
+    text = path.read_text() if path.exists() else ""
+    if text and not text.endswith("\n"):
+        text += "\n"
+    line = f"ssh_keys = {str(value).lower()}\n"
+    header = _SYNC_HEADER.search(text)
+    if header is None:
+        text += ("\n" if text else "") + "[sync]\n" + line
+    else:
+        # The table body runs from the line after its header to the next header (or the end).
+        start = text.index("\n", header.end()) + 1
+        following = _ANY_HEADER.search(text, start)
+        end = following.start() if following else len(text)
+        body = _SSH_KEYS_LINE.sub("", text[start:end], count=1).lstrip("\n")
+        text = text[:start] + line + body + text[end:]
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise LimaAiError("config", f"{path}: cannot add ssh_keys, fix the file first ({exc})") from None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
