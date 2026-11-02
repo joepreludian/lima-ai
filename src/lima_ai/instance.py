@@ -372,13 +372,25 @@ def remove(ws: Workspace, yes: bool, force: bool) -> None:
     click.echo(f"Deleted {ws.name}.")
 
 
-def list_vms(runner: Runner) -> None:
-    lima = Limactl(runner)
+def workspace_vms(lima: Limactl) -> list[tuple[Instance, dict | None]]:
+    """Every dev-* VM but the base image, in limactl order, with its instance record (None when it has none)."""
+    return [
+        (instance, lookup(instance.name))
+        for instance in lima.list()
+        if instance.name.startswith("dev-") and instance.name != BASE_INSTANCE
+    ]
+
+
+def table_lines(table: list[list[str]]) -> list[str]:
+    """Rows rendered as aligned columns, two spaces apart."""
+    widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
+    return ["  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip() for row in table]
+
+
+def list_lines(lima: Limactl) -> list[str]:
+    """The `list` table (header first); empty when there are no workspace VMs. Asks running VMs for their branch."""
     rows = []
-    for instance in lima.list():
-        if not instance.name.startswith("dev-") or instance.name == BASE_INSTANCE:
-            continue
-        info = lookup(instance.name)
+    for instance, info in workspace_vms(lima):
         project = info["project"] if info else "?"
         workspace = info["workspace"] if info else instance.name.removeprefix("dev-")
         branch = "-"
@@ -389,9 +401,14 @@ def list_vms(runner: Runner) -> None:
                 branch = position[0]
         rows.append([project, workspace, instance.status, branch, f"lima-{instance.name}.local"])
     if not rows:
+        return []
+    return table_lines([["PROJECT", "WORKSPACE", "STATUS", "BRANCH", "FQDN"], *rows])
+
+
+def list_vms(runner: Runner) -> None:
+    lines = list_lines(Limactl(runner))
+    if not lines:
         click.echo("no workspace VMs; create one with `lima-ai new`")
         return
-    table = [["PROJECT", "WORKSPACE", "STATUS", "BRANCH", "FQDN"], *rows]
-    widths = [max(len(row[i]) for row in table) for i in range(len(table[0]))]
-    for row in table:
-        click.echo("  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip())
+    for line in lines:
+        click.echo(line)
