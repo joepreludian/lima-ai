@@ -437,7 +437,10 @@ def removal_report(workspaces: list[Workspace]) -> tuple[list[str], bool]:
     for ws in workspaces:
         lines.append(f"  {ws.name} ({ws.names.project} {ws.names.workspace})")
         if ws.instance().running:
-            risks = unsaved_work(ws)
+            try:
+                risks = unsaved_work(ws)
+            except LimaAiError as err:  # unreachable VM: say so, treat as at risk, let --force remove it
+                risks = [f"could not be checked for unsaved work: {err.message}"]
             unsaved = unsaved or bool(risks)
             lines += [f"    {risk}" for risk in risks]
         else:

@@ -847,6 +847,19 @@ def test_remove_many_stops_at_the_first_failed_delete(env):
     assert (state_dir() / f"instances/{OTHER}.json").exists()
 
 
+def test_remove_many_reports_an_unreachable_running_vm_and_still_deletes_it_with_force(env):
+    workspaces = two_workspaces(env, other_status="Running")
+    env.runner.on(f"limactl shell {OTHER} printenv HOME", returncode=255, stderr="ssh: connect to host port 22")
+    lines, unsaved = instance.removal_report(workspaces)
+    assert lines[-2:] == [
+        f"  {OTHER} (other/thing b)",
+        f"    could not be checked for unsaved work: `limactl shell {OTHER} printenv HOME` failed (exit 255)",
+    ]
+    assert unsaved is True
+    instance.remove_many(workspaces, yes=False, force=True)
+    assert len(env.runner.find("limactl delete")) == 2
+
+
 def test_destroy_without_arguments_with_no_vms_says_so(env):
     env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped")))
     result = env.invoke(["destroy"], interactive=True)
