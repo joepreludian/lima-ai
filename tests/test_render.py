@@ -135,7 +135,7 @@ def test_pinned_versions_and_checksums_are_rendered(cfg, tmp_path):
 def test_system_script_configures_avahi_for_lima0(cfg, tmp_path):
     render_base(cfg, tmp_path)
     text = (tmp_path / "provision/10-system.sh").read_text()
-    for package in ["avahi-daemon", "libnss-mdns", "ripgrep", "rsync", "build-essential"]:
+    for package in ["avahi-daemon", "libnss-mdns", "ripgrep", "rsync", "build-essential", "fzf", "lazygit"]:
         assert package in text
     assert "allow-interfaces=lima0" in text
     assert "use-ipv6=no" in text
@@ -166,6 +166,9 @@ def test_guest_scripts_are_available(cfg):
         "cargo -V",
         "claude --version",
         "rtk --version",
+        "rg --version",
+        "fzf --version",
+        "lazygit --version",
         "docker compose version",
         "docker-backup --version",
         "docker-backup doctor",

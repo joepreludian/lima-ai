@@ -17,6 +17,9 @@ check node -v
 check cargo -V
 check claude --version
 check rtk --version
+check rg --version
+check fzf --version
+check lazygit --version
 check docker compose version
 check docker-backup --version
 check sg docker -c "docker-backup doctor"
