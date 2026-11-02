@@ -43,7 +43,8 @@ restores correctly even when the folder name differs. docker-backup shows
 what it will create, overwrite or skip, and asks before it changes
 anything. `--overwrite` empties and refills volumes that already exist,
 after lima-ai asks its own confirmation. `backup --full` backs up the whole
-Docker daemon instead of one project.
+Docker daemon instead of one project. [Backup and restore](backup.md) covers
+what is saved, how compose files are found, and what happens on failure.
 
 ## What is copied into a VM
 
