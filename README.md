@@ -7,6 +7,8 @@ Run several Claude Code agents in parallel on a Mac, each in its own
 disposable Linux VM, each working on one workspace of your project: a
 branch, an experiment, a review.
 
+REMARK: This project uses Lima Vms. This project isn't associated to Lima itself.
+
 ```
 lima-ai new preludian/myapp feat-login     →  lima-dev-myapp-feat-login.local
 lima-ai new preludian/myapp feat-billing   →  lima-dev-myapp-feat-billing.local
