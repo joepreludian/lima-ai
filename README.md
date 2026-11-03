@@ -3,6 +3,8 @@
   <img alt="lima-ai" src="https://raw.githubusercontent.com/joepreludian/lima-ai/main/docs/images/logo.svg" width="360">
 </picture>
 
+https://lima-ai.readthedocs.io/
+
 Run several Claude Code agents in parallel on a Mac, each in its own
 disposable Linux VM, each working on one workspace of your project: a
 branch, an experiment, a review.
