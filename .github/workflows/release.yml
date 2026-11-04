@@ -60,7 +60,7 @@ jobs:
       - name: Check the distributions
         run: uv run --no-project --with twine twine check dist/*
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/
@@ -108,7 +108,7 @@ jobs:
           cp dist/lima-ai README.md LICENSE "$name/"
           tar -czf "dist/$name.tar.gz" "$name"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tarball-${{ matrix.target }}
           path: dist/*.tar.gz
