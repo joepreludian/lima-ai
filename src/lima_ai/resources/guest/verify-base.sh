@@ -23,6 +23,8 @@ check lazygit --version
 check docker compose version
 check docker-backup --version
 check sg docker -c "docker-backup doctor"
+check aws --version
+check session-manager-plugin --version
 # The backups folder from the host is mounted and writable.
 check test -w /backups
 check avahi-daemon --check

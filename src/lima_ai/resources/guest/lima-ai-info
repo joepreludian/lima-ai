@@ -68,7 +68,7 @@ os_name="${os_name% }"
 # The tools the base image provisions, in the order they are listed; only the
 # ones present are named, since older VMs came from a smaller base.
 tools=()
-for tool in docker git lazygit tmux rg fzf jq node npm cargo claude rtk docker-backup; do
+for tool in docker git lazygit tmux rg fzf jq node npm cargo claude rtk docker-backup aws session-manager-plugin; do
   command -v "$tool" >/dev/null 2>&1 || continue
   if [ "$tool" = node ]; then
     major="$(node -v 2>/dev/null | sed -nE 's/^v?([0-9]+).*/\1/p')"

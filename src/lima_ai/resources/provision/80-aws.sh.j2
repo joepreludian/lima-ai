@@ -1,0 +1,23 @@
+#!/bin/bash
+# AWS CLI {{ aws_cli }} and Session Manager plugin {{ ssm_plugin }} (pinned, checksum verified).
+set -euo pipefail
+marker="/var/lib/lima-ai/80-aws.done"
+[ -e "$marker" ] && exit 0
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+curl -fsSL -o "$tmp/awscli.zip" "https://awscli.amazonaws.com/awscli-exe-linux-aarch64-{{ aws_cli }}.zip"
+echo "{{ aws_cli_sha256 }}  $tmp/awscli.zip" | sha256sum -c -
+unzip -q "$tmp/awscli.zip" -d "$tmp"
+# --update so a build that died between this line and the marker can be rerun:
+# the plain installer refuses an existing /usr/local/aws-cli.
+(cd "$tmp" && ./aws/install --update)
+
+curl -fsSL -o "$tmp/ssm.deb" \
+  "https://s3.amazonaws.com/session-manager-downloads/plugin/{{ ssm_plugin }}/ubuntu_arm64/session-manager-plugin.deb"
+echo "{{ ssm_plugin_sha256 }}  $tmp/ssm.deb" | sha256sum -c -
+dpkg -i "$tmp/ssm.deb"
+
+mkdir -p "$(dirname "$marker")"
+touch "$marker"

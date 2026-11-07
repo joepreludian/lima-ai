@@ -17,6 +17,7 @@ PROVISION = (
     ("50-claude.sh", "user"),
     ("60-rtk.sh", "user"),
     ("70-docker-backup.sh", "system"),
+    ("80-aws.sh", "system"),
 )
 
 # Where backups_dir is mounted in every VM; `new` names it to the user.
@@ -56,6 +57,10 @@ def _context(cfg: Config) -> dict:
         "rtk_sha256": cfg.versions.rtk_sha256,
         "docker_backup": cfg.versions.docker_backup,
         "docker_backup_sha256": cfg.versions.docker_backup_sha256,
+        "aws_cli": cfg.versions.aws_cli,
+        "aws_cli_sha256": cfg.versions.aws_cli_sha256,
+        "ssm_plugin": cfg.versions.ssm_plugin,
+        "ssm_plugin_sha256": cfg.versions.ssm_plugin_sha256,
     }
 
 

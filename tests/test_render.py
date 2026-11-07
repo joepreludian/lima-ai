@@ -81,6 +81,7 @@ def test_provision_entries_in_order_with_modes(cfg):
         ("user", "provision/50-claude.sh"),
         ("user", "provision/60-rtk.sh"),
         ("system", "provision/70-docker-backup.sh"),
+        ("system", "provision/80-aws.sh"),
     ]
     assert [name for name, _ in PROVISION] == [url.removeprefix("provision/") for _, url in entries]
 
@@ -133,6 +134,17 @@ def test_pinned_versions_and_checksums_are_rendered(cfg, tmp_path):
     assert "sha256sum -c" in backup
     node = (tmp_path / "provision/30-node.sh").read_text()
     assert "fnm install 24" in node
+    aws = (tmp_path / "provision/80-aws.sh").read_text()
+    assert "https://awscli.amazonaws.com/awscli-exe-linux-aarch64-2.39.6.zip" in aws
+    assert cfg.versions.aws_cli_sha256 in aws
+    assert "./aws/install --update" in aws
+    assert (
+        "https://s3.amazonaws.com/session-manager-downloads/plugin/1.2.896.0/ubuntu_arm64/session-manager-plugin.deb"
+        in aws
+    )
+    assert cfg.versions.ssm_plugin_sha256 in aws
+    assert aws.count("sha256sum -c") == 2
+    assert "dpkg -i" in aws
 
 
 def test_system_script_configures_avahi_for_lima0(cfg, tmp_path):
@@ -183,6 +195,8 @@ def test_guest_scripts_are_available(cfg):
         "docker compose version",
         "docker-backup --version",
         "docker-backup doctor",
+        "aws --version",
+        "session-manager-plugin --version",
         "test -w /backups",
         "avahi-daemon --check",
     ]:
@@ -370,6 +384,19 @@ def test_lima_ai_info_shows_the_node_major_version(tmp_path):
     result = tools_card(tmp_path, on_path={"node": "v24.1.0"})
     assert result.returncode == 0, result.stderr
     assert "* Installed here: git, node 24.\n" in result.stdout
+
+
+def test_lima_ai_info_lists_the_aws_tools_last(tmp_path):
+    result = tools_card(
+        tmp_path,
+        on_path={
+            "docker-backup": "docker-backup 0.4.0",
+            "aws": "aws-cli/2.39.6",
+            "session-manager-plugin": "1.2.896.0",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "* Installed here: git, docker-backup, aws, session-manager-plugin.\n" in result.stdout
 
 
 def test_lima_ai_info_finds_tools_in_the_guest_homes_own_bins_off_path(tmp_path):
