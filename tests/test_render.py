@@ -9,6 +9,7 @@ import yaml
 
 from lima_ai.config import Config, SyncConfig, VmConfig, load_config
 from lima_ai.render import (
+    GUEST_BACKUPS,
     PROVISION,
     guest_script,
     render_base,
@@ -50,9 +51,10 @@ def test_every_port_forward_to_host_localhost_is_ignored(cfg):
 
 def test_mounts_developer_dir_read_only_and_backups_writable(cfg):
     doc = yaml.safe_load(render_template(cfg))
+    assert GUEST_BACKUPS == "/backups"
     assert doc["mounts"] == [
         {"location": str(cfg.developer_dir), "writable": False},
-        {"location": str(cfg.backups_dir), "mountPoint": "/backups/docker", "writable": True},
+        {"location": str(cfg.backups_dir), "mountPoint": "/backups", "writable": True},
     ]
 
 
@@ -181,6 +183,7 @@ def test_guest_scripts_are_available(cfg):
         "docker compose version",
         "docker-backup --version",
         "docker-backup doctor",
+        "test -w /backups",
         "avahi-daemon --check",
     ]:
         assert check in verify

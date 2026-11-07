@@ -6,15 +6,13 @@
 | `auth [--from-stdin]` | Run `claude setup-token` and store the token (mode 600) |
 | `base [--rebuild]` | Build, check, seal and stop `dev-base` |
 | `template` | Print the rendered `dev-base` Lima template |
-| `new [<project>] [<workspace>] [--branch NAME \| --no-branch] [--restore BACKUP] [--cpus N] [--memory 16GiB] [--disk 100GiB]` | Create a workspace VM; asks for the project (fzf when installed), the workspace and the branch when they are not given |
+| `new [<project>] [<workspace>] [--branch NAME \| --no-branch] [--cpus N] [--memory 16GiB] [--disk 100GiB]` | Create a workspace VM; asks for the project (fzf when installed), the workspace and the branch when they are not given |
 | `shell [<project> <workspace>]` | Open a shell in the VM's working copy, with your SSH agent forwarded; with no arguments, picks the VM for you |
 | `list` (alias `ls`) | List workspace VMs with project, workspace, status, branch and FQDN |
 | `sync <project> <workspace>` | Copy the host project into the VM again |
 | `sync-claude <project> <workspace>` | Copy the Claude token, Claude config, git config and (if enabled) SSH keys again |
 | `start <project> <workspace>` / `stop <project> <workspace>` | Start or stop a workspace VM |
 | `destroy [<project> <workspace>] [--yes] [--force]` | Delete workspace VMs after checking for unsaved work; with no arguments, pick them from a checklist |
-| `backup <project> <workspace> [--full] [--no-images] [--no-external] [--compose-file FILE]...` | Back up the project's Docker data to the backups folder |
-| `restore <project> <workspace> <backup> [--overwrite] [--full] [--compose-file FILE]...` | Restore a backup into the VM |
 
 Add `-v` before a command (`lima-ai -v new …`) to print every command
 lima-ai runs.

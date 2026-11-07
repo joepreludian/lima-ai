@@ -41,8 +41,8 @@ sequenceDiagram
     CLI->>VM: rsync the ~/.claude subset and git config
     CLI->>VM: lima-ai-info and the instance file (project, workspace, creation time)
     CLI->>VM: rsync the project into ~/work/myapp
-    opt branch or --restore
-        CLI->>VM: git switch, docker-backup restore
+    opt branch
+        CLI->>VM: git switch
     end
     CLI-->>You: the VM's connection card, then an offer to open a shell
 ```
@@ -94,7 +94,7 @@ flowchart LR
         vgit["~/.gitconfig<br/>~/.ssh/known_hosts"]
         env["~/.config/lima-ai/env"]
         ro["/Users/you/Developer<br/>(read-only)"]
-        rw["/backups/docker<br/>(read-write)"]
+        rw["/backups<br/>(read-write)"]
     end
     remote[("Git remote")]
 
@@ -113,7 +113,7 @@ flowchart LR
 |---|---|
 | Root, `sudo`, Docker, install anything | yes, inside its VM |
 | Read your projects | yes: `~/Developer` is mounted **read-only** at the same path |
-| Write to your Mac's files | only `~/Developer/backups/docker` (mounted at `/backups/docker`) |
+| Write to your Mac's files | only `~/Developer/backups/docker` (mounted at `/backups`) |
 | Expose ports on your Mac's `localhost` | no: no VM port is forwarded to your Mac |
 | Reach services on your Mac | yes: `host.lima.internal` reaches your Mac's `localhost`, like any Lima VM |
 | Use your SSH key | yes, through the forwarded `ssh-agent` while an SSH connection to the VM is open; the key file never enters the VM |
