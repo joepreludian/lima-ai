@@ -28,7 +28,7 @@ mounts:
 - location: {{ developer_dir | tojson }}
   writable: false
 - location: {{ backups_dir | tojson }}
-  mountPoint: /backups/docker
+  mountPoint: {{ guest_backups }}
   writable: true
 containerd:
   system: false

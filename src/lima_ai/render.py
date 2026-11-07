@@ -19,6 +19,9 @@ PROVISION = (
     ("70-docker-backup.sh", "system"),
 )
 
+# Where backups_dir is mounted in every VM; `new` names it to the user.
+GUEST_BACKUPS = "/backups"
+
 _env = jinja2.Environment(
     undefined=jinja2.StrictUndefined,
     keep_trailing_newline=True,
@@ -46,6 +49,7 @@ def _context(cfg: Config) -> dict:
         "vm": cfg.vm,
         "developer_dir": str(cfg.developer_dir),
         "backups_dir": str(cfg.backups_dir),
+        "guest_backups": GUEST_BACKUPS,
         "provision": PROVISION,
         "node_major": cfg.versions.node_major,
         "rtk": cfg.versions.rtk,
