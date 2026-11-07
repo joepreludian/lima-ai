@@ -4,9 +4,9 @@ from pathlib import Path
 
 import click
 
-from lima_ai import __version__, auth, base, doctor, instance, wizard
+from lima_ai import __version__, auth, base, doctor, hook, instance, wizard
 from lima_ai.aws_config import find_aws_files
-from lima_ai.config import Config, load_config
+from lima_ai.config import Config, load_config, save_setting
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
 from lima_ai.runner import Runner
@@ -110,11 +110,29 @@ def template(app: App) -> None:
 
 @cli.command("base")
 @click.option("--rebuild", is_flag=True, help="Delete and rebuild an existing dev-base.")
+@click.option(
+    "--use-hook",
+    "use_hook",
+    metavar="PATH",
+    help="Run this script in dev-base after provisioning, and remember it in config.toml.",
+)
+@click.option(
+    "--init-hook", "init_hook", metavar="PATH", help="Write a commented starter hook script to PATH and exit."
+)
 @pass_app
-def base_command(app: App, rebuild: bool) -> None:
+def base_command(app: App, rebuild: bool, use_hook: str | None, init_hook: str | None) -> None:
     """Build the golden dev-base VM that workspace VMs are cloned from."""
+    if init_hook is not None:
+        if use_hook is not None or rebuild:
+            raise click.UsageError("--init-hook cannot be combined with --use-hook or --rebuild")
+        path = hook.write_starter(Path(init_hook).expanduser().resolve())
+        click.echo(f"Wrote {path}. Edit it, then build with:\n  lima-ai base --use-hook {path} --rebuild")
+        return
     app.require("limactl")
-    base.build(app.config, app.runner, rebuild)
+    selected = hook.resolve(app.config, use_hook)
+    if use_hook is not None and selected is not None:
+        save_setting("base", "hook", str(selected.path))
+    base.build(app.config, app.runner, rebuild, hook=selected)
 
 
 @cli.command("auth")
