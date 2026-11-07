@@ -71,7 +71,10 @@ variant, and how to move data to and from the Mac's Docker.
   VM?" (default: yes); `--aws` and `--no-aws` answer without asking, and
   outside a terminal the answer is yes. Those files land in the VM's
   `~/.aws` with the folder at mode 700 and the files at 600; nothing
-  already in the VM's `~/.aws` is deleted. A profile that uses SSO works
+  already in the VM's `~/.aws` is deleted. `credentials` is copied as it
+  is, so any long-lived access key in it ends up on the VM's unencrypted
+  disk, where the agent has root; say no, or `--no-aws`, for a workspace
+  that should not have it. A profile that uses SSO works
   until the copied token expires. Then either log in again on the Mac and
   run `sync-claude`, or log in inside the VM with
   `aws sso login --use-device-code`. `cli/cache` is not copied; the VM
