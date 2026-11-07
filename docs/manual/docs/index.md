@@ -21,8 +21,8 @@ write to your Mac's files, except for one backup folder.
 ### A golden base, cloned per workspace
 
 `lima-ai base` builds one Ubuntu VM, `dev-base`, with Docker, Node, Rust,
-Claude Code, rtk, docker-backup and the terminal tools tmux, ripgrep, fzf and
-lazygit. It checks the toolchain, then seals the
+Claude Code, rtk, docker-backup, the AWS CLI with the Session Manager plugin,
+and the terminal tools tmux, ripgrep, fzf and lazygit. It checks the toolchain, then seals the
 VM: the machine-id and SSH host keys are wiped, so every clone boots with its
 own identity. `lima-ai new` clones that base, which takes seconds instead of
 a fresh install, and fills the clone:
@@ -84,6 +84,7 @@ flowchart LR
         project["~/Developer/preludian/myapp"]
         claude["~/.claude"]
         gitconfig["~/.gitconfig<br/>~/.ssh/known_hosts"]
+        aws["~/.aws"]
         token["~/.config/lima-ai/oauth-token"]
         developer["~/Developer"]
         backups["~/Developer/backups/docker"]
@@ -92,6 +93,7 @@ flowchart LR
         work["~/work/myapp<br/>(git checkout)"]
         vclaude["~/.claude"]
         vgit["~/.gitconfig<br/>~/.ssh/known_hosts"]
+        vaws["~/.aws"]
         env["~/.config/lima-ai/env"]
         ro["/Users/you/Developer<br/>(read-only)"]
         rw["/backups<br/>(read-write)"]
@@ -101,6 +103,7 @@ flowchart LR
     project -- "rsync" --> work
     claude -- "rsync: subset, host paths rewritten" --> vclaude
     gitconfig -- "rsync: Mac-only settings removed" --> vgit
+    aws -- "rsync, if you say yes" --> vaws
     token -- "stdin" --> env
     developer -. "mount" .-> ro
     backups <-. "mount" .-> rw
@@ -117,6 +120,7 @@ flowchart LR
 | Expose ports on your Mac's `localhost` | no: no VM port is forwarded to your Mac |
 | Reach services on your Mac | yes: `host.lima.internal` reaches your Mac's `localhost`, like any Lima VM |
 | Use your SSH key | yes, through the forwarded `ssh-agent` while an SSH connection to the VM is open; the key file never enters the VM |
+| Use AWS | yes, with the config and SSO token copied from your Mac when you say yes; refresh with `sync-claude` or `aws sso login --use-device-code` in the VM |
 | Use Claude | with a long-lived token from `claude setup-token` (your Max subscription) |
 
 !!! warning

@@ -15,9 +15,9 @@ VM, but it overwrites files that exist on both sides with the host's copy.
 It asks first if the VM has uncommitted changes, or if the VM's repository
 is on a different branch or commit than the host's.
 
-**Refresh Claude or git config** after changing `~/.claude` or
-`~/.gitconfig` on the Mac, or after running `lima-ai auth` again:
-`lima-ai sync-claude preludian/myapp feat-login`.
+**Refresh Claude, git or AWS config** after changing `~/.claude`,
+`~/.gitconfig` or `~/.aws` on the Mac, after a new `aws sso login`, or after
+running `lima-ai auth` again: `lima-ai sync-claude preludian/myapp feat-login`.
 
 **Pause a VM** to free memory: `lima-ai stop …` and later `lima-ai start …`.
 
@@ -65,6 +65,25 @@ variant, and how to move data to and from the Mac's Docker.
   non-standard name is only used when the forwarded agent holds it or you
   add a `config` entry in the VM yourself. The VM disk under `~/.lima` is
   not encrypted; `lima-ai destroy` deletes it along with the keys.
+- **AWS config**, if you say yes. When `~/.aws` on the Mac has a `config`,
+  a `credentials` file or SSO tokens under `sso/cache`, `new` and
+  `sync-claude` ask "Copy your AWS config and SSO session (~/.aws) into the
+  VM?" (default: yes); `--aws` and `--no-aws` answer without asking, and
+  outside a terminal the answer is yes. Those files land in the VM's
+  `~/.aws` with the folder at mode 700 and the files at 600; nothing
+  already in the VM's `~/.aws` is deleted. A profile that uses SSO works
+  until the copied token expires. Then either log in again on the Mac and
+  run `sync-claude`, or log in inside the VM with
+  `aws sso login --use-device-code`. `cli/cache` is not copied; the VM
+  derives role credentials again from the token. The file is copied as is,
+  so a profile whose `credential_process` runs a Mac-only program
+  (aws-vault, 1Password's `op`) does not work in the VM.
 - **The project**, including `.git/` and `.env*` files. Left out:
   `node_modules/`, `target/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`,
   `build/`, `.next/`, `.nuxt/`, `.turbo/`, `.cache/` and `.DS_Store`.
+
+!!! warning "Upgrading from 0.12"
+
+    VMs cloned from a `dev-base` built by lima-ai 0.12 or earlier have no
+    `aws` or `session-manager-plugin`. Run `lima-ai base --rebuild`; VMs
+    created after that have both.

@@ -25,10 +25,10 @@ write to your Mac's files, except for one backup folder.
 
 ## How it works
 
-`lima-ai base` builds one golden Ubuntu VM with Docker, Node, Rust and
-Claude Code, then seals it. `lima-ai new` clones that base in seconds, copies
-in your project, your Claude config and your git config, and gives the clone
-its own IP and mDNS name. Nothing is shared with your Mac except a read-only
+`lima-ai base` builds one golden Ubuntu VM with Docker, Node, Rust, Claude
+Code and the AWS CLI, then seals it. `lima-ai new` clones that base in
+seconds, copies in your project, your Claude config, your git config and, if
+you say yes, your AWS config, and gives the clone its own IP and mDNS name. Nothing is shared with your Mac except a read-only
 mount of `~/Developer` and one read-write backups folder, and no VM port is
 forwarded to your Mac's `localhost`.
 
@@ -81,8 +81,8 @@ with `uv tool install .` or `make pex`. The
 all of these.
 
 Check it with `lima-ai --version`, then run `lima-ai doctor` to see what
-else is missing. Upgrading from 0.11? Run `lima-ai base --rebuild`: VMs now
-mount the backups folder at `/backups`.
+else is missing. Upgrading from 0.12 or earlier? Run `lima-ai base --rebuild`:
+VMs now mount the backups folder at `/backups` and ship the AWS CLI.
 
 ## Development
 

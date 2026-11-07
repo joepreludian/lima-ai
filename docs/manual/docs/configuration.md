@@ -20,6 +20,10 @@ rtk        = "0.49.0"
 rtk_sha256 = "c8ea4b6560841e73157c134fd4a3293914c6ede42e786ee985cf491fde691ba7"
 docker_backup        = "0.4.0"
 docker_backup_sha256 = "9c7bdf7c25d4f8c19253a3ffd73bfd34e2d8d4f6e1cd7736b27feffbee8a22d8"
+aws_cli           = "2.39.6"
+aws_cli_sha256    = "5763332bdcb432c19ee122545856fd350c3bb306753212deedcfccc76f4d20c3"
+ssm_plugin        = "1.2.896.0"
+ssm_plugin_sha256 = "914eeca87b18b55356c58be197080f73742b3ca60d3823f0a45670dc9056aa9c"
 
 [sync]
 extra_excludes = ["*.sqlite3"]                # added to the project rsync excludes

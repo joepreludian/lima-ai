@@ -7,8 +7,8 @@ that fixes it.
 
 **`new` failed halfway.** The VM is kept, and the error names the step that
 failed. Fix the cause, then run `lima-ai sync …` if the project copy failed,
-or `lima-ai sync-claude …` for the token, Claude or git steps. To start
-over, run `lima-ai destroy … --force`.
+or `lima-ai sync-claude …` for the token, Claude, git or AWS steps. To
+start over, run `lima-ai destroy … --force`.
 
 **Claude asks you to log in inside a VM.** The token is read from
 `~/.config/lima-ai/env` by every interactive shell, but Claude still shows
@@ -24,6 +24,11 @@ VM, running `lima-ai-claude-setup` does the same.
 (`lima-ai list`), then ask macOS directly:
 `dscacheutil -q host -a name lima-dev-myapp-feat-login.local`. The IP that
 `lima-ai new` printed works as well.
+
+**`aws` says the SSO token is expired or missing.** The VM holds a copy of
+the token your Mac had when the VM was created or last synced. Run
+`aws sso login` on the Mac and then `lima-ai sync-claude …`, or log in
+inside the VM with `aws sso login --use-device-code`.
 
 **`git push` fails with "Permission denied (publickey)".** Load your key on
 the Mac (`ssh-add -l` should list it), then open a new `lima-ai shell`.
