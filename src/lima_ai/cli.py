@@ -4,9 +4,9 @@ from pathlib import Path
 
 import click
 
-from lima_ai import __version__, auth, base, doctor, hook, instance, wizard
+from lima_ai import __version__, auth, base, config_file, doctor, hook, instance, wizard
 from lima_ai.aws_config import find_aws_files
-from lima_ai.config import Config, load_config, save_setting
+from lima_ai.config import Config, config_dir, load_config, save_setting
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
 from lima_ai.runner import Runner
@@ -133,6 +133,18 @@ def base_command(app: App, rebuild: bool, use_hook: str | None, init_hook: str |
     if use_hook is not None and selected is not None:
         save_setting("base", "hook", str(selected.path))
     base.build(app.config, app.runner, rebuild, hook=selected)
+
+
+@cli.command("config")
+@click.option("--edit", is_flag=True, help="Open config.toml in $VISUAL/$EDITOR, creating a commented one first.")
+@pass_app
+def config_command(app: App, edit: bool) -> None:
+    """Print the settings in effect as TOML, or edit the config file."""
+    path = config_dir() / "config.toml"
+    if edit:
+        config_file.edit(path)
+        return
+    click.echo(config_file.effective_toml(app.config, path), nl=False)
 
 
 @cli.command("auth")
