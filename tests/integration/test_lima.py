@@ -3,7 +3,9 @@
 They build dev-base if it is missing, create dev-limaaitest-* VMs from a
 fixture compose project (a `build:` service with a named volume) and delete
 them afterwards. The CLI runs under `script` because `new` and `destroy`
-prompt, and prompts need a terminal.
+prompt, and prompts need a terminal. A dev-base built by lima-ai 0.11 or
+earlier mounts the backups folder at the old path; the first test says so
+and asks for `lima-ai base --rebuild` instead of failing later in verify-base.
 """
 
 import json
@@ -22,6 +24,7 @@ from pathlib import Path
 import pytest
 
 from lima_ai.config import load_config
+from lima_ai.render import GUEST_BACKUPS
 
 pytestmark = pytest.mark.lima
 
@@ -120,6 +123,18 @@ def lab(tmp_path_factory):
     lab.cleanup()
 
 
+def stale_base_reason(listing: str) -> str | None:
+    """Why dev-base (as `limactl list --json dev-base` prints it) cannot serve this suite, or None."""
+    mounts = json.loads(listing).get("config", {}).get("mounts", [])
+    points = [mount.get("mountPoint") or mount.get("location") for mount in mounts]
+    if GUEST_BACKUPS in points:
+        return None
+    return (
+        f"dev-base has no mount at {GUEST_BACKUPS} (its mounts: {', '.join(points) or 'none'}): "
+        "it was built by an older lima-ai; run `lima-ai base --rebuild` first"
+    )
+
+
 def served(instance: str) -> str:
     with urllib.request.urlopen(f"http://lima-{instance}.local:8002/", timeout=10) as response:
         return response.read().decode().strip()
@@ -132,6 +147,7 @@ def test_base_is_built_verified_and_sealed(lab):
         lab.cli("base")
     listed = subprocess.run(["limactl", "list", "--json", "dev-base"], env=lab.env, capture_output=True, text=True)
     assert json.loads(listed.stdout)["status"] == "Stopped"
+    assert stale_base_reason(listed.stdout) is None, stale_base_reason(listed.stdout)
 
 
 def test_two_clones_serve_their_own_content_on_the_same_port(lab):
