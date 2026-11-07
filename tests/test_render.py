@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from lima_ai import __version__
 from lima_ai.config import Config, SyncConfig, VmConfig, load_config
 from lima_ai.render import (
     GUEST_BACKUPS,
@@ -14,6 +15,7 @@ from lima_ai.render import (
     guest_script,
     render_base,
     render_env,
+    render_hook_starter,
     render_instance_file,
     render_template,
     rsync_excludes,
@@ -578,3 +580,27 @@ def test_prompt_install_script_adds_one_bashrc_line_however_often_it_runs(tmp_pa
     assert bashrc.startswith("PS1='stock> '\n")
     assert bashrc.count("# lima-ai prompt\n") == 1
     assert bashrc.count(". ~/.config/lima-ai/prompt.sh") == 1
+
+
+def test_hook_starter_is_valid_bash_that_does_nothing_unmodified(tmp_path):
+    starter = render_hook_starter()
+    assert f"lima-ai {__version__}" in starter
+    path = tmp_path / "starter.sh"
+    path.write_text(starter)
+    subprocess.run(["bash", "-n", path], check=True)
+    result = subprocess.run(["bash", path], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert result.stdout == ""
+    for needle in (
+        "set -euo pipefail",
+        "export DEBIAN_FRONTEND=noninteractive",
+        "# apt-get install -y openjdk-21-jdk-headless",
+        'sudo -u "$SUDO_USER" -i bash -c',
+        "sha256sum -c",
+        "# java -version",
+        "limactl shell dev-base",
+        "~/.lima/dev-base/",
+        "lima-ai config --edit",
+        "lima-ai base --rebuild",
+    ):
+        assert needle in starter

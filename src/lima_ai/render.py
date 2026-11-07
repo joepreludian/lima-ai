@@ -82,6 +82,11 @@ def render_base(cfg: Config, dest: Path) -> Path:
     return template
 
 
+def render_hook_starter() -> str:
+    """The commented starter hook that `lima-ai base --init-hook` writes."""
+    return _render("hook-starter.sh", {"version": __version__})
+
+
 def guest_script(name: str) -> str:
     return _resource(f"guest/{name}").read_text()
 

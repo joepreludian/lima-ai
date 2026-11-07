@@ -1,0 +1,46 @@
+#!/bin/bash
+# Base image hook, written by lima-ai {{ version }}.
+#
+# lima-ai runs this file with bash, as root, inside dev-base while building it:
+# after its own provisioning (Docker, Node, Rust, Claude Code, rtk, the AWS CLI
+# are already installed) and before it verifies and seals the image. Whatever
+# you install here ends up in every workspace VM created afterwards.
+#
+# Build with it, and remember it under [base] hook in ~/.config/lima-ai/config.toml:
+#   lima-ai base --use-hook /path/to/this/file --rebuild
+# Later rebuilds (lima-ai base --rebuild) use it again without the flag.
+#
+# As written, this file does nothing. Uncomment and edit what you need.
+
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# --- Packages ---------------------------------------------------------------
+# apt-get update
+# apt-get install -y openjdk-21-jdk-headless
+
+# --- As the login user ------------------------------------------------------
+# $SUDO_USER is the user workspace VMs log in as; it owns ~/.local/share/fnm
+# (Node), ~/.cargo (Rust) and Claude Code. HOME here is /root, while the
+# working directory is that user's home. Tools that install per user go
+# through sudo -u:
+# sudo -u "$SUDO_USER" -i bash -c 'curl -s "https://get.sdkman.io" | bash'
+
+# --- A pinned download ------------------------------------------------------
+# The built-in scripts pin a version and a sha256 for anything fetched by URL:
+# curl -fsSL -o /tmp/tool.tgz https://example.com/tool-1.2.3.tgz
+# echo "<sha256>  /tmp/tool.tgz" | sha256sum -c
+# tar -C /usr/local -xzf /tmp/tool.tgz
+
+# --- Self-check -------------------------------------------------------------
+# Nothing you install is checked by lima-ai's verification; check it yourself.
+# A non-zero exit fails the build and leaves dev-base running.
+# java -version
+
+# --- When it goes wrong -----------------------------------------------------
+# The hook's output is on your terminal. dev-base is left running, so you can
+# look around and run the failing command by hand:
+#   limactl shell dev-base
+# Lima's own logs are in ~/.lima/dev-base/ (serialv.log, ha.stderr.log).
+# Fix this file and run `lima-ai base --rebuild`. To build without the hook,
+# remove the hook line with `lima-ai config --edit`.
