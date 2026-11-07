@@ -9,6 +9,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from lima_ai.errors import LimaAiError
 from lima_ai.limactl import Instance
 from lima_ai.runner import Runner
 from lima_ai.sync import rsync_argv, ssh_host
@@ -42,7 +43,10 @@ def stage_aws_files(home: Path, staging: Path) -> None:
             directory.mkdir(mode=0o700, exist_ok=True)
             directory.chmod(0o700)  # mkdir's mode is narrowed by the umask, never widened
         target = staging / relative
-        shutil.copyfile(source, target)
+        try:
+            shutil.copyfile(source, target)
+        except OSError as exc:  # e.g. a root-owned token left by a sudo'd aws sso login
+            raise LimaAiError("sync-aws", f"cannot read {source}: {exc.strerror}") from None
         target.chmod(0o600)
 
 

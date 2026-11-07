@@ -1,8 +1,10 @@
+import os
 from pathlib import Path
 
 import pytest
 
 from lima_ai.aws_config import find_aws_files, push_aws_config, stage_aws_files
+from lima_ai.errors import LimaAiError
 from lima_ai.limactl import Instance
 from tests.fakes import FakeRunner
 
@@ -115,3 +117,16 @@ def test_push_does_nothing_without_aws_files(tmp_path):
     runner = FakeRunner()
     push_aws_config(runner, INSTANCE, tmp_path / "home")
     assert runner.calls == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read anything")
+def test_stage_reports_an_unreadable_file_as_a_lima_ai_error(home, tmp_path):
+    token = home / ".aws/sso/cache/a2.json"
+    token.chmod(0o000)
+    try:
+        with pytest.raises(LimaAiError) as info:
+            stage_aws_files(home, tmp_path / "staging")
+    finally:
+        token.chmod(0o600)
+    assert info.value.step == "sync-aws"
+    assert str(token) in info.value.message
