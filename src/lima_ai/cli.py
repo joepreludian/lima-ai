@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from lima_ai import __version__, auth, backup, base, doctor, instance, wizard
+from lima_ai import __version__, auth, base, doctor, instance, wizard
 from lima_ai.config import Config, load_config
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
@@ -129,27 +129,22 @@ def workspace_command(name: str | None = None, **settings):
 @click.argument("workspace", required=False)
 @click.option("--branch", help="Git branch to create or switch to in the VM (default: the workspace name).")
 @click.option("--no-branch", is_flag=True, help="Stay on the branch the host has checked out.")
-@click.option(
-    "--restore", "restore_from", metavar="BACKUP", help="Restore this backup (under backups_dir) into the VM."
-)
 @click.option("--cpus", type=int, help="CPUs for this VM (default: dev-base's).")
 @click.option("--memory", help="Memory in GiB, e.g. 16GiB (default: dev-base's).")
 @click.option("--disk", help="Disk size in GiB, e.g. 100GiB (default: dev-base's).")
 @pass_app
-def new(app: App, project, workspace, branch, no_branch, restore_from, cpus, memory, disk) -> None:
+def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk) -> None:
     """Create a workspace VM for PROJECT (a folder under developer_dir); asks for what is missing."""
     app.require("rsync", "limactl")
     created_at = instance.utc_now()  # when the user started, not when they finished answering the prompts
     request = wizard.fill(app.config, app.runner, app.interactive, project, workspace, branch, no_branch)
     ws = app.workspace(request.project, request.workspace)
-    after_project = backup.restore_step(ws, restore_from) if restore_from else None
     instance.new(
         ws,
         branch=request.branch,
         cpus=cpus,
         memory=memory,
         disk=disk,
-        after_project=after_project,
         created_at=created_at,
     )
     if app.interactive and click.confirm("Open a shell in it now?", default=True, err=True):
@@ -217,40 +212,6 @@ def destroy(app: App, project: str | None, workspace: str | None, yes: bool, for
     picks = instance.pick_vms(app.runner, app.interactive)
     if picks:
         instance.remove_many([app.workspace(p, w) for p, w in picks], yes=yes, force=force)
-
-
-@workspace_command("backup")
-@click.option("--full", is_flag=True, help="Back up the whole Docker daemon instead of this project.")
-@click.option("--no-images", is_flag=True, help="Leave out locally built images.")
-@click.option("--no-external", is_flag=True, help="Leave out the project's external volumes.")
-@click.option(
-    "--compose-file",
-    "compose_files",
-    multiple=True,
-    metavar="FILE",
-    help="Compose file, relative to the project root (repeatable, in order); replaces detection.",
-)
-@pass_app
-def backup_command(app: App, project: str, workspace: str, full, no_images, no_external, compose_files) -> None:
-    """Back up the project's Docker volumes and built images from the VM to backups_dir."""
-    backup.run_backup(app.workspace(project, workspace), full, no_images, no_external, compose_files)
-
-
-@workspace_command("restore")
-@click.argument("backup_path", metavar="BACKUP")
-@click.option("--overwrite", is_flag=True, help="Empty and refill volumes that already exist in the VM.")
-@click.option("--full", is_flag=True, help="Restore everything in the backup under its recorded names.")
-@click.option(
-    "--compose-file",
-    "compose_files",
-    multiple=True,
-    metavar="FILE",
-    help="Compose file, relative to the project root (repeatable, in order); replaces detection.",
-)
-@pass_app
-def restore_command(app: App, project: str, workspace: str, backup_path, overwrite, full, compose_files) -> None:
-    """Restore BACKUP (a path under backups_dir) into the VM."""
-    backup.run_restore(app.workspace(project, workspace), backup_path, overwrite, full, compose_files)
 
 
 @cli.command("list")

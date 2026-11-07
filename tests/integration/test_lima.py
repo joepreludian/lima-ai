@@ -2,8 +2,8 @@
 
 They build dev-base if it is missing, create dev-limaaitest-* VMs from a
 fixture compose project (a `build:` service with a named volume) and delete
-them afterwards, together with the backups they wrote. The CLI runs under
-`script` so docker-backup gets the terminal its confirmation prompt needs.
+them afterwards. The CLI runs under `script` because `new` and `destroy`
+prompt, and prompts need a terminal.
 """
 
 import json
@@ -27,9 +27,8 @@ pytestmark = pytest.mark.lima
 
 FIXTURE = Path(__file__).parent / "fixture"
 PROJECT = "limaaitest"
-OTHER_PROJECT = "limaaitest2"
-INSTANCES = [f"dev-{PROJECT}-a", f"dev-{PROJECT}-b", f"dev-{PROJECT}-c", f"dev-{OTHER_PROJECT}-d"]
-# click's confirmations: docker-backup's and destroy's [y/N], and new's shell offer [Y/n].
+INSTANCES = [f"dev-{PROJECT}-a", f"dev-{PROJECT}-b"]
+# click's confirmations: destroy's [y/N] and new's shell offer [Y/n].
 PROMPT = re.compile(r"\[(y/N|Y/n)\]")
 
 
@@ -40,7 +39,6 @@ class Lab:
         self.home = root / "home"
         self.backups_dir = load_config().backups_dir
         self.build_id = uuid.uuid4().hex
-        self.backups: list[str] = []
         self.env = {
             **os.environ,
             "HOME": str(self.home),
@@ -50,8 +48,7 @@ class Lab:
         }
 
     def setup(self) -> None:
-        for name in (PROJECT, OTHER_PROJECT):
-            shutil.copytree(FIXTURE, self.developer / name)
+        shutil.copytree(FIXTURE, self.developer / PROJECT)
         (self.home / ".claude").mkdir(parents=True)
         (self.home / ".claude/CLAUDE.md").write_text("# integration test\n")
         (self.home / ".gitconfig").write_text("[user]\n\tname = lima-ai test\n\temail = test@example.com\n")
@@ -110,19 +107,9 @@ class Lab:
         home = self.vm(instance, "printenv HOME")
         return self.vm(instance, script, workdir=f"{home}/work/{slug}")
 
-    def backup(self, *args: str) -> str:
-        output = self.cli("backup", *args)
-        line = next(line for line in output.splitlines() if line.startswith("Backup written to "))
-        name = Path(line.removeprefix("Backup written to ").strip()).name
-        self.backups.append(name)
-        return name
-
     def cleanup(self) -> None:
         for instance in INSTANCES:
             subprocess.run(["limactl", "delete", "-f", instance], env=self.env, capture_output=True)
-        for name in self.backups:
-            path = self.backups_dir / name
-            shutil.rmtree(path, ignore_errors=True) if path.is_dir() else path.unlink(missing_ok=True)
 
 
 @pytest.fixture(scope="module")
@@ -136,17 +123,6 @@ def lab(tmp_path_factory):
 def served(instance: str) -> str:
     with urllib.request.urlopen(f"http://lima-{instance}.local:8002/", timeout=10) as response:
         return response.read().decode().strip()
-
-
-def image_build_id(lab: Lab, instance: str, slug: str) -> str:
-    return lab.vm(
-        instance,
-        f"docker image inspect {slug}-web --format '{{{{index .Config.Labels \"lima-ai-test.build-id\"}}}}'",
-    )
-
-
-def volume_content(lab: Lab, instance: str, volume: str) -> str:
-    return lab.vm(instance, f"docker run --rm -v {volume}:/data alpine:3 cat /data/index.html")
 
 
 def test_base_is_built_verified_and_sealed(lab):
@@ -194,44 +170,7 @@ def test_clone_has_the_full_toolchain(lab):
     lab.vm(f"dev-{PROJECT}-a", guest_script("verify-base.sh"))
 
 
-def test_backup_restores_into_a_new_clone_with_its_built_image(lab):
-    name = lab.backup(PROJECT, "a")
-    lab.cli("new", PROJECT, "c", "--restore", name, confirm=True)
-    instance = f"dev-{PROJECT}-c"
-    assert volume_content(lab, instance, f"{PROJECT}_data") == "clone-a"
-    assert image_build_id(lab, instance, PROJECT) == lab.build_id, "the image was rebuilt, not restored"
-    assert served(instance) == "clone-a"
-    lab.backups_for_later = name
-
-
-def test_restore_maps_volume_and_image_to_another_project_name(lab):
-    name = lab.backups_for_later
-    lab.cli("new", OTHER_PROJECT, "d")
-    lab.cli("restore", OTHER_PROJECT, "d", name, confirm=True)
-    instance = f"dev-{OTHER_PROJECT}-d"
-    assert volume_content(lab, instance, f"{OTHER_PROJECT}_data") == "clone-a"
-    assert image_build_id(lab, instance, OTHER_PROJECT) == lab.build_id
-
-
-def test_restore_with_overwrite_brings_the_backup_data_back(lab):
-    name = lab.backups_for_later
-    instance = f"dev-{PROJECT}-a"
-    lab.compose(instance, PROJECT, "docker compose exec -T web sh -c 'echo changed > /data/index.html'")
-    assert served(instance) == "changed"
-    lab.cli("restore", PROJECT, "a", name, "--overwrite", confirm=True)
-    assert volume_content(lab, instance, f"{PROJECT}_data") == "clone-a"
-
-
-def test_full_backup_round_trip(lab):
-    instance = f"dev-{PROJECT}-b"
-    name = lab.backup(PROJECT, "b", "--full")
-    assert "-full-" in name
-    lab.compose(instance, PROJECT, "docker compose exec -T web sh -c 'echo changed > /data/index.html'")
-    lab.cli("restore", PROJECT, "b", name, "--full", "--overwrite", confirm=True)
-    assert volume_content(lab, instance, f"{PROJECT}_data") == "clone-b"
-
-
 def test_rm_deletes_the_vm(lab):
-    lab.cli("destroy", OTHER_PROJECT, "d", "--force")
+    lab.cli("destroy", PROJECT, "b", "--force")
     listed = subprocess.run(["limactl", "list", "--json"], env=lab.env, capture_output=True, text=True)
-    assert f"dev-{OTHER_PROJECT}-d" not in listed.stdout
+    assert f"dev-{PROJECT}-b" not in listed.stdout

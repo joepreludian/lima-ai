@@ -277,3 +277,9 @@ def test_new_aborts_when_fzf_finds_no_match(env):
     result = env.invoke(["new"], input="feat-a\n", interactive=True)
     assert result.exit_code == 1
     assert not env.runner.find("limactl clone")
+
+
+def test_new_no_longer_accepts_restore(env):
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--restore", "x"])
+    assert result.exit_code == 2
+    assert "No such option '--restore'" in result.output

@@ -1,5 +1,6 @@
 from importlib.metadata import version
 
+import pytest
 from click.testing import CliRunner
 
 from lima_ai.cli import cli
@@ -42,3 +43,10 @@ def test_commands_needing_limactl_fail_clearly_without_it(monkeypatch, tmp_path)
     result = CliRunner().invoke(cli, ["base"])
     assert result.exit_code == 1
     assert "error [preflight]: limactl not found" in result.output
+
+
+@pytest.mark.parametrize("command", ["backup", "restore"])
+def test_backup_and_restore_commands_are_gone(command):
+    result = CliRunner().invoke(cli, [command, "preludian/myapp", "feat-a"])
+    assert result.exit_code == 2
+    assert f"No such command '{command}'" in result.output

@@ -245,10 +245,9 @@ def new(
     cpus: int | None = None,
     memory: str | None = None,
     disk: str | None = None,
-    after_project=None,
     created_at: str | None = None,
 ) -> None:
-    """Clone dev-base into a workspace VM and fill it. `after_project` runs last (restore).
+    """Clone dev-base into a workspace VM and fill it.
 
     `created_at` is when the user started `new` (the CLI takes it before its prompts); it defaults to now.
     """
@@ -292,8 +291,6 @@ def new(
         sync_project(ws, instance, ask=False)
         if branch:
             switch_branch(ws, branch)
-        if after_project:
-            after_project()
         card = ws.shell(["bash", "-c", "exec ~/.local/bin/lima-ai-info"], step="info").stdout
     except LimaAiError as err:
         raise LimaAiError(
