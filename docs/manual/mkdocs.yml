@@ -52,6 +52,7 @@ nav:
   - Docker backups: docker-backups.md
   - Command reference: commands.md
   - Configuration: configuration.md
+  - The base image: base-image.md
   - Troubleshooting: troubleshooting.md
   - Development: development.md
 

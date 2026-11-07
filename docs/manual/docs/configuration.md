@@ -28,11 +28,24 @@ ssm_plugin_sha256 = "914eeca87b18b55356c58be197080f73742b3ca60d3823f0a45670dc905
 [sync]
 extra_excludes = ["*.sqlite3"]                # added to the project rsync excludes
 ssh_keys = false                              # copy ~/.ssh private keys into VMs; unset = ask once and save the answer
+
+[base]
+hook = "~/lima/custom.sh"                     # a script lima-ai base runs as root in dev-base after its own provisioning
 ```
 
 Mounts, VM defaults and tool versions are fixed when `dev-base` is built.
 After changing `developer_dir`, `backups_dir`, `[vm]` or `[versions]`, run
 `lima-ai base --rebuild`; VMs you already created keep their old settings.
+The `hook` under `[base]` is your own additions to the image; `lima-ai base
+--use-hook PATH` sets it. [The base image](base-image.md) explains how it runs.
+
+`lima-ai config` prints the settings in effect, defaults included, headed by
+a comment naming the file. `lima-ai config --edit` opens that file in
+`$VISUAL` or `$EDITOR`; when there is none yet it creates one first with
+every setting present but commented out at its default, so you uncomment
+what you change and upgrades keep moving the defaults you did not touch.
+After the editor closes the file is checked, and a mistake is reported the
+way any config error is.
 
 Files lima-ai keeps on your Mac:
 

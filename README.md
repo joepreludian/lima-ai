@@ -26,7 +26,8 @@ write to your Mac's files, except for one backup folder.
 ## How it works
 
 `lima-ai base` builds one golden Ubuntu VM with Docker, Node, Rust, Claude
-Code and the AWS CLI, then seals it. `lima-ai new` clones that base in
+Code and the AWS CLI, then seals it. Anything else you want in every VM goes in a
+hook script that `lima-ai base --use-hook` runs during the build. `lima-ai new` clones that base in
 seconds, copies in your project, your Claude config, your git config and, if
 you say yes, your AWS config, and gives the clone its own IP and mDNS name. Nothing is shared with your Mac except a read-only
 mount of `~/Developer` and one read-write backups folder, and no VM port is

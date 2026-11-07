@@ -4,7 +4,8 @@
 |---|---|
 | `doctor` | Check that this machine has the tools and setup lima-ai needs; exits 1 if something required is missing |
 | `auth [--from-stdin]` | Run `claude setup-token` and store the token (mode 600) |
-| `base [--rebuild]` | Build, check, seal and stop `dev-base` |
+| `base [--rebuild] [--use-hook PATH] [--init-hook PATH]` | Build, check, seal and stop `dev-base`; `--use-hook` runs your script in it after provisioning and remembers it, `--init-hook` writes a commented starter and exits (see [The base image](base-image.md)) |
+| `config [--edit]` | Print the effective settings as TOML; `--edit` opens `~/.config/lima-ai/config.toml` in `$VISUAL`/`$EDITOR`, creating it with every setting commented out |
 | `template` | Print the rendered `dev-base` Lima template |
 | `new [<project>] [<workspace>] [--branch NAME \| --no-branch] [--cpus N] [--memory 16GiB] [--disk 100GiB] [--aws \| --no-aws]` | Create a workspace VM; asks for the project (fzf when installed), the workspace and the branch when they are not given, and whether to copy `~/.aws` |
 | `shell [<project> <workspace>]` | Open a shell in the VM's working copy, with your SSH agent forwarded; with no arguments, picks the VM for you |

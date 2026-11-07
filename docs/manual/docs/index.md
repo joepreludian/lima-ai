@@ -20,12 +20,13 @@ write to your Mac's files, except for one backup folder.
 
 ### A golden base, cloned per workspace
 
-`lima-ai base` builds one Ubuntu VM, `dev-base`, with Docker, Node, Rust,
+`lima-ai base` [builds one Ubuntu VM](base-image.md), `dev-base`, with Docker, Node, Rust,
 Claude Code, rtk, docker-backup, the AWS CLI with the Session Manager plugin,
 and the terminal tools tmux, ripgrep, fzf and lazygit. It checks the toolchain, then seals the
 VM: the machine-id and SSH host keys are wiped, so every clone boots with its
 own identity. `lima-ai new` clones that base, which takes seconds instead of
-a fresh install, and fills the clone:
+a fresh install, and fills the clone. Your own additions go in a hook
+script, see [The base image](base-image.md).
 
 ```mermaid
 sequenceDiagram
