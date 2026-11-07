@@ -1,4 +1,5 @@
 import os
+import textwrap
 
 import click
 
@@ -9,6 +10,8 @@ from lima_ai.limactl import Limactl
 from lima_ai.naming import BASE_INSTANCE
 from lima_ai.render import guest_script, render_base
 from lima_ai.runner import Runner
+
+BANNER_WIDTH = 100
 
 
 def banner(rebuild: bool, hook: Hook | None) -> str:
@@ -32,10 +35,16 @@ def banner(rebuild: bool, hook: Hook | None) -> str:
         "       (serialv.log has the provisioning output, ha.stderr.log the host side)",
         f"debug: if a step fails {BASE_INSTANCE} is left running: limactl shell {BASE_INSTANCE}",
     ]
-    width = max(len(line) for line in lines)
+    # Long values (a hook path outside $HOME) wrap under their label instead of widening the box.
+    wrapped = [
+        part
+        for line in lines
+        for part in textwrap.wrap(line, BANNER_WIDTH - 4, subsequent_indent=" " * 7, break_on_hyphens=False)
+    ]
+    width = max(len(line) for line in wrapped)
     top = "┌" + "─" * (width + 2) + "┐"
     bottom = "└" + "─" * (width + 2) + "┘"
-    return "\n".join([top, *(f"│ {line.ljust(width)} │" for line in lines), bottom])
+    return "\n".join([top, *(f"│ {line.ljust(width)} │" for line in wrapped), bottom])
 
 
 def build(cfg: Config, runner: Runner, rebuild: bool, hook: Hook | None = None) -> None:

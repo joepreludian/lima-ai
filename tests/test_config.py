@@ -208,3 +208,8 @@ def test_save_setting_fills_an_empty_table_with_commented_keys(tmp_path):
     path = write(tmp_path, '[base]\n# hook = "~/lima/custom.sh"\n\n[sync]\n# ssh_keys = false\n')
     save_setting("base", "hook", "/tmp/h.sh", path)
     assert path.read_text() == '[base]\nhook = "/tmp/h.sh"\n# hook = "~/lima/custom.sh"\n\n[sync]\n# ssh_keys = false\n'
+
+
+def test_relative_base_hook_is_resolved_against_the_config_file(tmp_path):
+    cfg = load_config(write(tmp_path, '[base]\nhook = "hooks/custom.sh"\n'))
+    assert cfg.base.hook == tmp_path / "hooks/custom.sh"

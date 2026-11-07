@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from lima_ai.base import banner, build
@@ -129,3 +131,13 @@ def test_banner_is_printed_before_anything_is_deleted(cfg, hook, capsys):
     err = capsys.readouterr().err
     assert err.index("hook:") < err.index("==> Deleting the old dev-base")
     assert "==> Running hook" in err
+
+
+def test_banner_wraps_a_long_hook_path_instead_of_widening_the_box(tmp_path):
+    long_dir = Path("/Volumes") / ("very-long-directory-name-" * 4)
+    hook = Hook(path=long_dir / "custom.sh", source="config", content="")
+    lines = banner(rebuild=False, hook=hook).splitlines()
+    assert len({len(line) for line in lines}) == 1
+    assert max(len(line) for line in lines) <= 100
+    assert "custom.sh" in "".join(lines)
+    assert "(from config.toml)" in "".join(lines)

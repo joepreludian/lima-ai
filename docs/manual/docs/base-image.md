@@ -174,7 +174,9 @@ Write the starter, then replace its package section with:
 ```bash
 apt-get update
 apt-get install -y openjdk-21-jdk-headless
-echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64' > /etc/profile.d/java.sh
+# The JVM directory is named after the architecture; derive it rather than hardcode it.
+java_home="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+echo "export JAVA_HOME=$java_home" > /etc/profile.d/java.sh
 ```
 
 and uncomment the self-check at the end:

@@ -93,8 +93,16 @@ def load_config(path: Path | None = None) -> Config:
         cfg,
         developer_dir=Path(cfg.developer_dir).expanduser(),
         backups_dir=Path(cfg.backups_dir).expanduser(),
-        base=dataclasses.replace(cfg.base, hook=hook.expanduser() if hook is not None else None),
+        base=dataclasses.replace(cfg.base, hook=_hook_path(hook, path)),
     )
+
+
+def _hook_path(hook: Path | None, config_path: Path) -> Path | None:
+    """`~` expanded; a relative hook is taken from the config file's directory, not the cwd."""
+    if hook is None:
+        return None
+    hook = hook.expanduser()
+    return hook if hook.is_absolute() else config_path.parent / hook
 
 
 def _build(cls, values: dict[str, Any], prefix: str, path: Path, sections: set[str] = frozenset()):

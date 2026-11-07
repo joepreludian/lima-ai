@@ -1,5 +1,6 @@
 """The user's base image hook: a script `lima-ai base` runs as root in dev-base after provisioning."""
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -31,7 +32,8 @@ class Hook:
 def resolve(cfg: Config, use_hook: str | None) -> Hook | None:
     """The hook to build with: --use-hook PATH, else the one saved in config.toml, else none."""
     if use_hook is not None:
-        path = Path(use_hook).expanduser().resolve()
+        # abspath normalises without following symlinks: a dotfiles symlink is saved as named.
+        path = Path(os.path.abspath(os.path.expanduser(use_hook)))
         if not path.is_file():
             raise LimaAiError("base", f"hook {path} not found")
         return Hook(path, "flag", _read(path))

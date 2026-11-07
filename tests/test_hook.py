@@ -85,3 +85,22 @@ def test_hook_content_is_a_snapshot_taken_at_resolve_time(tmp_path):
     hook = resolve(Config(), str(path))
     path.write_text("echo two\n")
     assert hook.content == "echo one\n"
+
+
+def test_flag_path_keeps_a_symlink_rather_than_its_target(tmp_path):
+    target = tmp_path / "dotfiles/hooks/custom.sh"
+    target.parent.mkdir(parents=True)
+    target.write_text("true\n")
+    link = tmp_path / "custom.sh"
+    link.symlink_to(target)
+    hook = resolve(Config(), str(link))
+    assert hook.path == link
+    assert hook.content == "true\n"
+
+
+def test_flag_path_is_normalised_without_resolving_symlinks(tmp_path, monkeypatch):
+    (tmp_path / "hooks").mkdir()
+    (tmp_path / "hooks/custom.sh").write_text("true\n")
+    monkeypatch.chdir(tmp_path / "hooks")
+    hook = resolve(Config(), "../hooks/./custom.sh")
+    assert hook.path == tmp_path / "hooks/custom.sh"
