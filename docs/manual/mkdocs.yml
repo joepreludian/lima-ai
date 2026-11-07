@@ -49,7 +49,7 @@ nav:
   - Installation: install.md
   - Quickstart: quickstart.md
   - Everyday tasks: everyday.md
-  - Backup and restore: backup.md
+  - Docker backups: docker-backups.md
   - Command reference: commands.md
   - Configuration: configuration.md
   - Troubleshooting: troubleshooting.md

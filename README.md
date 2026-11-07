@@ -39,7 +39,8 @@ The manual is at **https://lima-ai.readthedocs.io/**:
 - [Introduction](https://lima-ai.readthedocs.io/): how it works, with diagrams, and what an agent in a VM can and cannot do
 - [Installation](https://lima-ai.readthedocs.io/install/): requirements and install methods
 - [Quickstart](https://lima-ai.readthedocs.io/quickstart/): two workspaces of one project, side by side
-- [Everyday tasks](https://lima-ai.readthedocs.io/everyday/): syncing, pausing, backing up and restoring
+- [Everyday tasks](https://lima-ai.readthedocs.io/everyday/): syncing, pausing, and what is copied into a VM
+- [Docker backups](https://lima-ai.readthedocs.io/docker-backups/): the shared folder, and docker-backup from inside a VM
 - [Command reference](https://lima-ai.readthedocs.io/commands/): every command and flag, and how VMs are named
 - [Configuration](https://lima-ai.readthedocs.io/configuration/): `config.toml` and the files lima-ai keeps on your Mac
 - [Troubleshooting](https://lima-ai.readthedocs.io/troubleshooting/)
@@ -80,7 +81,8 @@ with `uv tool install .` or `make pex`. The
 all of these.
 
 Check it with `lima-ai --version`, then run `lima-ai doctor` to see what
-else is missing.
+else is missing. Upgrading from 0.11? Run `lima-ai base --rebuild`: VMs now
+mount the backups folder at `/backups`.
 
 ## Development
 
@@ -92,5 +94,5 @@ make pex         # dist/lima-ai, a self-contained executable for this machine's 
 ```
 
 `make test-lima` builds `dev-base` if it is missing, creates
-`dev-limaaitest-*` VMs from a small compose project, and deletes them and
-their backups when it finishes.
+`dev-limaaitest-*` VMs from a small compose project, and deletes them when
+it finishes.

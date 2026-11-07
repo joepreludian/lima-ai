@@ -21,30 +21,19 @@ is on a different branch or commit than the host's.
 
 **Pause a VM** to free memory: `lima-ai stop …` and later `lima-ai start …`.
 
-**Save and move Docker data.** Back up the project's volumes and the images
-it built locally:
+**Save and move Docker data.** Every VM has docker-backup and a folder
+shared with your Mac, `/backups` in the VM and `~/Developer/backups/docker`
+on the Mac. From a shell in the VM:
 
 ```bash
-lima-ai backup preludian/myapp feat-login
+lima-ai shell preludian/myapp feat-login
+docker compose stop
+docker-backup backup --from-docker-compose compose.yaml /backups/myapp-feat-login-$(date -u +%Y%m%dT%H%M%SZ)
+docker compose start
 ```
 
-The compose stack is stopped while the volumes are read, then started
-again. The backup lands in `~/Developer/backups/docker/myapp-feat-login-<UTC time>`.
-lima-ai then prints the commands that restore it into your Mac's Colima.
-It never runs them itself. Restore into any VM, including a new one:
-
-```bash
-lima-ai restore preludian/myapp feat-billing myapp-feat-login-20260926T141500Z
-lima-ai new preludian/myapp feat-review --restore myapp-feat-login-20260926T141500Z
-```
-
-Volumes are renamed to the names the restoring project uses, so a backup
-restores correctly even when the folder name differs. docker-backup shows
-what it will create, overwrite or skip, and asks before it changes
-anything. `--overwrite` empties and refills volumes that already exist,
-after lima-ai asks its own confirmation. `backup --full` backs up the whole
-Docker daemon instead of one project. [Backup and restore](backup.md) covers
-what is saved, how compose files are found, and what happens on failure.
+[Docker backups](docker-backups.md) has the restore side, the whole-daemon
+variant, and how to move data to and from the Mac's Docker.
 
 ## What is copied into a VM
 

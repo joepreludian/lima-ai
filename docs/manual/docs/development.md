@@ -9,8 +9,8 @@ make pex         # dist/lima-ai, a self-contained executable for this machine's 
 ```
 
 `make test-lima` builds `dev-base` if it is missing, creates
-`dev-limaaitest-*` VMs from a small compose project, and deletes them and
-their backups when it finishes.
+`dev-limaaitest-*` VMs from a small compose project, and deletes them when
+it finishes.
 
 ## Building this manual
 

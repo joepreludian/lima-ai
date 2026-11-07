@@ -6,7 +6,7 @@ go unnoticed.
 
 ```toml
 developer_dir = "~/Developer"                 # where <project> paths start
-backups_dir   = "~/Developer/backups/docker"  # mounted read-write in every VM
+backups_dir   = "~/Developer/backups/docker"  # mounted read-write at /backups in every VM
 
 [vm]                                          # dev-base defaults; new --cpus/--memory/--disk override per VM
 cpus   = 4
