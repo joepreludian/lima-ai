@@ -55,6 +55,8 @@ class Lab:
         (self.home / ".claude").mkdir(parents=True)
         (self.home / ".claude/CLAUDE.md").write_text("# integration test\n")
         (self.home / ".gitconfig").write_text("[user]\n\tname = lima-ai test\n\temail = test@example.com\n")
+        (self.home / ".aws").mkdir(mode=0o700)
+        (self.home / ".aws/config").write_text("[profile limaaitest]\nregion = eu-west-1\n")
         config = self.root / "config/lima-ai"
         config.mkdir(parents=True)
         (config / "config.toml").write_text(f'developer_dir = "{self.developer}"\nbackups_dir = "{self.backups_dir}"\n')
@@ -154,7 +156,8 @@ def test_two_clones_serve_their_own_content_on_the_same_port(lab):
     for workspace in ("a", "b"):
         instance = f"dev-{PROJECT}-{workspace}"
         # The fixture has no git, so --no-branch changes nothing in the VM; it exercises the flag's path.
-        output = lab.cli("new", PROJECT, workspace, "--no-branch")
+        # --aws answers the [Y/n] question that cli() would otherwise decline.
+        output = lab.cli("new", PROJECT, workspace, "--no-branch", "--aws")
         assert "LIMA-AI - Instance Details" in output
         assert f"| Project:    {PROJECT}" in output
         assert f"| Workspace:  {workspace}" in output
@@ -184,6 +187,14 @@ def test_clone_has_the_full_toolchain(lab):
     from lima_ai.render import guest_script
 
     lab.vm(f"dev-{PROJECT}-a", guest_script("verify-base.sh"))
+
+
+def test_clone_has_aws_tools_and_the_hosts_aws_config(lab):
+    instance = f"dev-{PROJECT}-a"
+    assert lab.vm(instance, "aws --version").startswith("aws-cli/2.39.6 ")
+    assert lab.vm(instance, "session-manager-plugin --version") == "1.2.896.0"
+    assert lab.vm(instance, "stat -c '%a' ~/.aws ~/.aws/config") == "700\n600"
+    assert lab.vm(instance, "cat ~/.aws/config") == "[profile limaaitest]\nregion = eu-west-1"
 
 
 def test_rm_deletes_the_vm(lab):
