@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 
 from lima_ai import __version__, auth, base, doctor, instance, wizard
+from lima_ai.aws_config import find_aws_files
 from lima_ai.config import Config, load_config
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
@@ -73,6 +74,23 @@ class App:
 pass_app = click.make_pass_decorator(App)
 
 
+def aws_wanted(app: App, flag: bool | None) -> bool:
+    """Whether ~/.aws goes into the VM: the --aws/--no-aws flag, else ask (default yes), else yes."""
+    if flag is False:
+        return False
+    if not find_aws_files(app.home):
+        click.echo("~/.aws has nothing to copy; skipping AWS config", err=True)
+        return False
+    if flag is True or not app.interactive:
+        return True
+    return click.confirm("Copy your AWS config and SSO session (~/.aws) into the VM?", default=True, err=True)
+
+
+AWS_OPTION = click.option(
+    "--aws/--no-aws", default=None, help="Copy ~/.aws into the VM, or not, without asking (default: ask)."
+)
+
+
 @click.group(cls=LimaAiGroup)
 @click.version_option(__version__, prog_name="lima-ai")
 @click.option("-v", "--verbose", is_flag=True, help="Echo every command lima-ai runs.")
@@ -132,12 +150,14 @@ def workspace_command(name: str | None = None, **settings):
 @click.option("--cpus", type=int, help="CPUs for this VM (default: dev-base's).")
 @click.option("--memory", help="Memory in GiB, e.g. 16GiB (default: dev-base's).")
 @click.option("--disk", help="Disk size in GiB, e.g. 100GiB (default: dev-base's).")
+@AWS_OPTION
 @pass_app
-def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk) -> None:
+def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk, aws) -> None:
     """Create a workspace VM for PROJECT (a folder under developer_dir); asks for what is missing."""
     app.require("rsync", "limactl")
     created_at = instance.utc_now()  # when the user started, not when they finished answering the prompts
     request = wizard.fill(app.config, app.runner, app.interactive, project, workspace, branch, no_branch)
+    aws = aws_wanted(app, aws)  # asked here so every prompt precedes the clone
     ws = app.workspace(request.project, request.workspace)
     instance.new(
         ws,
@@ -146,6 +166,7 @@ def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk) -> 
         memory=memory,
         disk=disk,
         created_at=created_at,
+        aws=aws,
     )
     if app.interactive and click.confirm("Open a shell in it now?", default=True, err=True):
         sys.exit(instance.open_shell(ws))
@@ -160,11 +181,12 @@ def sync(app: App, project: str, workspace: str) -> None:
 
 
 @workspace_command("sync-claude")
+@AWS_OPTION
 @pass_app
-def sync_claude(app: App, project: str, workspace: str) -> None:
-    """Push the Claude token, Claude config and git config into the VM again."""
+def sync_claude(app: App, project: str, workspace: str, aws: bool | None) -> None:
+    """Push the Claude token, Claude config, git config and (if confirmed) AWS config into the VM again."""
     app.require("rsync")
-    instance.sync_claude(app.workspace(project, workspace))
+    instance.sync_claude(app.workspace(project, workspace), aws=aws_wanted(app, aws))
 
 
 @cli.command()

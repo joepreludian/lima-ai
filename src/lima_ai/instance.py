@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from lima_ai import auth, menu
+from lima_ai.aws_config import push_aws_config
 from lima_ai.claude_config import push_claude_config
 from lima_ai.config import Config, save_ssh_keys, state_dir
 from lima_ai.errors import LimaAiError
@@ -187,12 +188,15 @@ def ssh_keys_wanted(ws: Workspace) -> bool:
     return answer
 
 
-def push_claude_and_git(ws: Workspace, instance: Instance, ssh_keys: bool) -> None:
+def push_claude_and_git(ws: Workspace, instance: Instance, ssh_keys: bool, aws: bool) -> None:
     note("==> Claude config")
     push_claude_config(ws.runner, instance, ws.guest_home, ws.cfg.developer_dir, ws.host_home)
     push_claude_setup(ws)
     note("==> Git config" + (" and SSH keys" if ssh_keys else ""))
     push_git_config(ws.runner, instance, ws.host_home, ssh_keys=ssh_keys)
+    if aws:
+        note("==> AWS config")
+        push_aws_config(ws.runner, instance, ws.host_home)
 
 
 def _git_position(run, repo: str) -> tuple[str, str] | None:
@@ -262,10 +266,12 @@ def new(
     memory: str | None = None,
     disk: str | None = None,
     created_at: str | None = None,
+    aws: bool = False,
 ) -> None:
     """Clone dev-base into a workspace VM and fill it.
 
     `created_at` is when the user started `new` (the CLI takes it before its prompts); it defaults to now.
+    `aws` copies the host's ~/.aws in as well (the CLI asks).
     """
     created_at = created_at or utc_now()
     cfg, lima = ws.cfg, ws.lima
@@ -298,7 +304,7 @@ def new(
         instance = ws.running_instance()
         note("==> Claude token")
         push_token(ws, token)
-        push_claude_and_git(ws, instance, ssh_keys)
+        push_claude_and_git(ws, instance, ssh_keys, aws)
         note("==> Guest tools")
         push_info_script(ws)
         push_prompt(ws)
@@ -312,7 +318,7 @@ def new(
         raise LimaAiError(
             err.step,
             f"{err.message}\n{ws.name} is kept. Retry with `{ws.hint('sync')}` (project) or "
-            f"`{ws.hint('sync-claude')}` (token, Claude and git config), "
+            f"`{ws.hint('sync-claude')}` (token, Claude, git and AWS config), "
             f"or discard it with `{ws.hint('destroy')}`.",
             err.stderr_tail,
         ) from None
@@ -326,13 +332,13 @@ def sync(ws: Workspace) -> None:
     sync_project(ws, ws.running_instance(), ask=True)
 
 
-def sync_claude(ws: Workspace) -> None:
+def sync_claude(ws: Workspace, aws: bool = False) -> None:
     token = auth.read_token()
     instance = ws.running_instance()
     ssh_keys = ssh_keys_wanted(ws)
     note("==> Claude token")
     push_token(ws, token)
-    push_claude_and_git(ws, instance, ssh_keys)
+    push_claude_and_git(ws, instance, ssh_keys, aws)
     note("==> Guest tools")
     push_info_script(ws)
     push_prompt(ws)

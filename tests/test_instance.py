@@ -1010,3 +1010,156 @@ def test_sync_skips_the_git_check_when_host_project_is_not_a_repo(env):
     result = env.invoke(["sync", "preludian/myapp", "feat-a"])
     assert result.exit_code == 0, result.output
     assert env.runner.find("--exclude-from=")
+
+
+# --- AWS config ------------------------------------------------------------------
+
+AWS_QUESTION = "Copy your AWS config and SSO session (~/.aws) into the VM? [Y/n]"
+
+
+def with_aws(env, sso: bool = True):
+    aws = env.home / ".aws"
+    (aws / "sso/cache").mkdir(parents=True)
+    (aws / "config").write_text("[profile dev]\nsso_session = acme\n")
+    if sso:
+        (aws / "sso/cache/a2.json").write_text('{"accessToken": "t"}\n')
+
+
+def aws_pushes(env):
+    return [c for c in env.runner.calls if c.argv[0] == "rsync" and c.argv[-2].endswith("/.aws")]
+
+
+def test_new_asks_about_aws_and_copies_on_enter(env):
+    env.write_token()
+    base_then_clone(env)
+    with_aws(env)
+    # branch prompt (default), AWS question (default yes), shell offer (no)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="\n\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert AWS_QUESTION in result.output
+    assert "==> AWS config" in result.output
+    assert len(aws_pushes(env)) == 1
+
+
+def test_new_skips_aws_on_no(env):
+    env.write_token()
+    base_then_clone(env)
+    with_aws(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="\nn\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "==> AWS config" not in result.output
+    assert aws_pushes(env) == []
+
+
+def test_new_asks_before_cloning_and_copies_after_claude_config_before_the_project(env):
+    env.write_token()
+    base_then_clone(env)
+    with_aws(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="\n\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert result.output.index(AWS_QUESTION) < result.output.index("==> Cloning")
+    cmds = env.runner.commands
+    # The env home has no .gitconfig, so the first rsync of this shape is the transformed Claude config;
+    # git config (when present) and Claude setup run between it and the AWS copy.
+    claude_config = index_of(cmds, f"rsync -a -e 'ssh -F /Users/jon/.lima/{INSTANCE}/ssh.config' /")
+    aws = cmds.index(aws_pushes(env)[0].command)
+    assert claude_config < aws < index_of(cmds, f"limactl shell {INSTANCE} mkdir -p {WORKDIR}")
+
+
+def test_new_does_not_ask_without_aws_files_and_says_so(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "Copy your AWS" not in result.output
+    assert "~/.aws has nothing to copy; skipping AWS config" in result.output
+    assert aws_pushes(env) == []
+
+
+def test_new_treats_an_aws_dir_with_only_cli_cache_as_nothing_to_copy(env):
+    env.write_token()
+    base_then_clone(env)
+    (env.home / ".aws/cli/cache").mkdir(parents=True)
+    (env.home / ".aws/cli/cache/role.json").write_text("{}\n")
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "Copy your AWS" not in result.output
+    assert "skipping AWS config" in result.output
+    assert aws_pushes(env) == []
+
+
+def test_new_copies_aws_without_asking_outside_a_terminal(env):
+    env.write_token()
+    base_then_clone(env)
+    with_aws(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[Y/n]" not in result.output
+    assert len(aws_pushes(env)) == 1
+
+
+def test_new_no_aws_flag_skips_silently(env):
+    env.write_token()
+    base_then_clone(env)
+    with_aws(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-aws"], input="\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "AWS" not in result.output
+    assert aws_pushes(env) == []
+
+
+def test_new_no_aws_flag_is_silent_even_without_aws_files(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-aws"])
+    assert result.exit_code == 0, result.output
+    assert "AWS" not in result.output
+
+
+def test_new_aws_flag_copies_without_asking(env):
+    env.write_token()
+    base_then_clone(env)
+    with_aws(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--aws"], input="\nn\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "Copy your AWS" not in result.output
+    assert len(aws_pushes(env)) == 1
+
+
+def test_new_failure_hint_names_aws_among_what_sync_claude_redoes(env):
+    env.write_token()
+    base_then_clone(env)
+    env.runner.on("--exclude-from=", returncode=23, stderr="rsync error")
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 1
+    assert "(token, Claude, git and AWS config)" in result.output
+
+
+def test_sync_claude_asks_about_aws_and_copies_on_enter(env):
+    env.write_token()
+    existing(env)
+    with_aws(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"], input="\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert AWS_QUESTION in result.output
+    assert len(aws_pushes(env)) == 1
+
+
+def test_sync_claude_no_aws_flag_skips(env):
+    env.write_token()
+    existing(env)
+    with_aws(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a", "--no-aws"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert "AWS" not in result.output
+    assert aws_pushes(env) == []
+
+
+def test_sync_claude_copies_aws_without_asking_outside_a_terminal(env):
+    env.write_token()
+    existing(env)
+    with_aws(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert "[Y/n]" not in result.output
+    assert len(aws_pushes(env)) == 1
