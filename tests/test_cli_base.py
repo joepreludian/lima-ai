@@ -69,7 +69,7 @@ def test_use_hook_is_saved_even_when_rebuild_is_missing(env):
 
 def test_saved_hook_is_used_without_the_flag(env):
     (env.tmp_path / "h.sh").write_text("echo saved\n")
-    env.cfg = dataclasses.replace(env.cfg, base=BaseConfig(hook=str(env.tmp_path / "h.sh")))
+    env.cfg = dataclasses.replace(env.cfg, base=BaseConfig(hook=env.tmp_path / "h.sh"))
     result = env.invoke(["base"])
     assert result.exit_code == 0, result.output
     assert any("echo saved\n" in c.argv for c in env.runner.calls)

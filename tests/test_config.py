@@ -186,7 +186,7 @@ def test_base_hook_defaults_to_none(tmp_path):
 
 def test_base_hook_is_read_and_tilde_expanded(tmp_path):
     cfg = load_config(write(tmp_path, '[base]\nhook = "~/lima/custom.sh"\n'))
-    assert cfg.base.hook == str(Path.home() / "lima/custom.sh")
+    assert cfg.base.hook == Path.home() / "lima/custom.sh"
 
 
 @pytest.mark.parametrize("text", ["[base]\nhook = 1\n", "[base]\nhook = true\n"])
@@ -201,7 +201,7 @@ def test_save_setting_writes_a_string_under_a_new_table(tmp_path):
     path = write(tmp_path, "[vm]\ncpus = 8\n")
     save_setting("base", "hook", "/Users/jon/lima/custom.sh", path)
     assert path.read_text() == '[vm]\ncpus = 8\n\n[base]\nhook = "/Users/jon/lima/custom.sh"\n'
-    assert load_config(path).base.hook == "/Users/jon/lima/custom.sh"
+    assert load_config(path).base.hook == Path("/Users/jon/lima/custom.sh")
 
 
 def test_save_setting_fills_an_empty_table_with_commented_keys(tmp_path):

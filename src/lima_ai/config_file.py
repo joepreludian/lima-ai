@@ -97,5 +97,5 @@ def edit(path: Path) -> None:
     try:
         click.edit(filename=str(path))
     except click.ClickException as exc:
-        raise LimaAiError("config", f"could not open an editor ({exc.message}); set $EDITOR") from None
+        raise LimaAiError("config", f"editor failed ({exc.message}); check $VISUAL or $EDITOR") from None
     load_config(path)

@@ -1,4 +1,5 @@
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -43,13 +44,13 @@ def test_template_toml_then_save_setting_fills_the_existing_table(tmp_path):
     path.write_text(template_toml())
     save_setting("base", "hook", "/tmp/h.sh", path)
     assert path.read_text().count("[base]") == 1
-    assert load_config(path).base.hook == "/tmp/h.sh"
+    assert load_config(path).base.hook == Path("/tmp/h.sh")
 
 
 def test_edit_creates_the_template_then_opens_the_editor(tmp_path, monkeypatch):
     editor = tmp_path / "ed"
     # The editor uncomments a line and changes its value, the way the template invites.
-    editor.write_text("#!/bin/sh\nsed -i '' 's/^# cpus = 4/cpus = 2/' \"$1\"\n")
+    editor.write_text('#!/bin/sh\nsed \'s/^# cpus = 4/cpus = 2/\' "$1" > "$1.new" && mv "$1.new" "$1"\n')
     editor.chmod(0o755)
     monkeypatch.setenv("VISUAL", str(editor))
     path = tmp_path / "cfg/config.toml"
@@ -75,4 +76,22 @@ def test_edit_without_a_working_editor_is_a_config_error(tmp_path, monkeypatch):
     with pytest.raises(LimaAiError) as excinfo:
         edit(tmp_path / "config.toml")
     assert excinfo.value.step == "config"
-    assert "set $EDITOR" in excinfo.value.message
+    assert "check $VISUAL or $EDITOR" in excinfo.value.message
+
+
+def test_edit_with_an_editor_that_exits_non_zero_says_so(tmp_path, monkeypatch):
+    editor = tmp_path / "ed"
+    editor.write_text("#!/bin/sh\nexit 1\n")
+    editor.chmod(0o755)
+    monkeypatch.setenv("VISUAL", str(editor))
+    with pytest.raises(LimaAiError) as excinfo:
+        edit(tmp_path / "config.toml")
+    assert excinfo.value.message.startswith("editor failed (")
+    assert "could not open" not in excinfo.value.message
+
+
+def test_effective_toml_shows_the_hook_with_a_tilde(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('[base]\nhook = "~/lima/custom.sh"\n')
+    text = effective_toml(load_config(path), path)
+    assert 'hook = "~/lima/custom.sh"' in text

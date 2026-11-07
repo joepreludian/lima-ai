@@ -63,7 +63,7 @@ HOOK_TEXT = 'apt-get install -y openjdk-21-jdk-headless\necho "it\'s $HOME"\n'
 def hook(tmp_path):
     path = tmp_path / "custom.sh"
     path.write_text(HOOK_TEXT)
-    return Hook(path=path, source="flag")
+    return Hook(path=path, source="flag", content=HOOK_TEXT)
 
 
 def test_hook_runs_as_root_in_the_guest_home_between_start_and_verify(cfg, hook):
@@ -99,7 +99,7 @@ def test_existing_base_refusal_mentions_a_saved_flag_hook(cfg, hook):
         build(cfg, runner, rebuild=False, hook=hook)
     assert "hook saved: lima-ai base --rebuild will use" in excinfo.value.message
     with pytest.raises(LimaAiError) as excinfo:
-        build(cfg, runner, rebuild=False, hook=Hook(path=hook.path, source="config"))
+        build(cfg, runner, rebuild=False, hook=Hook(path=hook.path, source="config", content=HOOK_TEXT))
     assert "hook saved" not in excinfo.value.message
 
 
@@ -112,7 +112,7 @@ def test_banner_names_the_hook_source_and_the_logs(hook, monkeypatch):
     assert "(from --use-hook, saved to config.toml)" in text
     assert "~/.lima/dev-base/" in text
     assert "limactl shell dev-base" in text
-    assert "(from config.toml)" in banner(rebuild=False, hook=Hook(path=hook.path, source="config"))
+    assert "(from config.toml)" in banner(rebuild=False, hook=Hook(path=hook.path, source="config", content=HOOK_TEXT))
     none = banner(rebuild=False, hook=None)
     assert "hook:  none (lima-ai base --init-hook PATH writes a starter)" in none
     assert none.splitlines()[1].strip(" │|").strip() == "lima-ai base"

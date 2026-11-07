@@ -21,10 +21,7 @@ def display_path(path: Path) -> str:
 class Hook:
     path: Path
     source: Literal["flag", "config"]
-
-    @property
-    def content(self) -> str:
-        return self.path.read_text()
+    content: str  # read when the hook is resolved, before anything is deleted or built
 
     @property
     def display(self) -> str:
@@ -37,17 +34,24 @@ def resolve(cfg: Config, use_hook: str | None) -> Hook | None:
         path = Path(use_hook).expanduser().resolve()
         if not path.is_file():
             raise LimaAiError("base", f"hook {path} not found")
-        return Hook(path, "flag")
+        return Hook(path, "flag", _read(path))
     if cfg.base.hook is not None:
-        path = Path(cfg.base.hook)
+        path = cfg.base.hook
         if not path.is_file():
             raise LimaAiError(
                 "base",
                 f"hook {path} not found (saved in {display_path(config_dir() / 'config.toml')}); "
                 "pass --use-hook PATH or remove it with lima-ai config --edit",
             )
-        return Hook(path, "config")
+        return Hook(path, "config", _read(path))
     return None
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text()
+    except OSError as exc:
+        raise LimaAiError("base", f"hook {path} not readable ({exc.strerror})") from None
 
 
 def write_starter(path: Path) -> Path:

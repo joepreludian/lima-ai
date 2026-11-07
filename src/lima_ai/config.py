@@ -43,7 +43,7 @@ class SyncConfig:
 @dataclass(frozen=True)
 class BaseConfig:
     # A script `lima-ai base` runs as root in dev-base after its own provisioning; None: no hook.
-    hook: str | None = None
+    hook: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -93,7 +93,7 @@ def load_config(path: Path | None = None) -> Config:
         cfg,
         developer_dir=Path(cfg.developer_dir).expanduser(),
         backups_dir=Path(cfg.backups_dir).expanduser(),
-        base=dataclasses.replace(cfg.base, hook=str(Path(hook).expanduser()) if hook is not None else None),
+        base=dataclasses.replace(cfg.base, hook=hook.expanduser() if hook is not None else None),
     )
 
 
@@ -132,14 +132,14 @@ def _check_type(expected: type, value: Any, key: str, path: Path) -> Any:
     else:
         ok = isinstance(value, expected)
     if not ok:
-        raise LimaAiError("config", f"'{key}' in {path} must be {_type_name(expected, key)}")
+        raise LimaAiError("config", f"'{key}' in {path} must be {_type_name(expected)}")
     return value
 
 
-def _type_name(expected: type, key: str) -> str:
+def _type_name(expected: type) -> str:
     if expected is bool:
         return "true or false"
-    if expected is Path or key.endswith("hook"):
+    if expected is Path:
         return "a path string"
     if expected is tuple:
         return "a list of strings"
