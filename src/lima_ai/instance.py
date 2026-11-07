@@ -13,7 +13,7 @@ from lima_ai.errors import LimaAiError
 from lima_ai.gitconfig import find_private_keys, push_git_config
 from lima_ai.limactl import Instance, Limactl, gib
 from lima_ai.naming import BASE_INSTANCE, project_dir, resolve
-from lima_ai.render import guest_script, render_env, render_instance_file, rsync_excludes
+from lima_ai.render import GUEST_BACKUPS, guest_script, render_env, render_instance_file, rsync_excludes
 from lima_ai.runner import Runner
 from lima_ai.sync import progress_flags, project_argv
 
@@ -22,6 +22,22 @@ MAX_LISTED_COMMITS = 20
 
 def note(message: str) -> None:
     click.echo(message, err=True)
+
+
+def display_path(path: Path) -> str:
+    """A host path for copy-pasting: ~-relative when under the home folder, shell-quoted."""
+    try:
+        return "~/" + shlex.quote(path.relative_to(Path.home()).as_posix())
+    except ValueError:
+        return shlex.quote(str(path))
+
+
+def backups_notice(cfg: Config) -> str:
+    """What `new` prints last: the shared backups folder, as seen from both sides."""
+    return (
+        f"Backups: {GUEST_BACKUPS} in the VM is {display_path(cfg.backups_dir)} on this Mac, read-write.\n"
+        "docker-backup is installed in the VM; see https://lima-ai.readthedocs.io/docker-backups/\n"
+    )
 
 
 class Workspace:
@@ -303,6 +319,7 @@ def new(
 
     click.echo(card, nl=False)  # as the VM printed it: the host adds nothing to the connection details
     click.echo(f"Open it with: {ws.hint('shell')}")
+    click.echo(backups_notice(cfg), nl=False)
 
 
 def sync(ws: Workspace) -> None:

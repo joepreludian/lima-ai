@@ -3,6 +3,7 @@ import dataclasses
 import json
 import re
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -131,8 +132,25 @@ def test_new_prints_the_card_from_the_vm_and_how_to_open_it(env):
     assert result.exit_code == 0, result.output
     assert env.runner.find(f"limactl shell {INSTANCE} bash -c 'exec ~/.local/bin/lima-ai-info'")
     # The card is printed as the VM produced it; the host adds nothing about the VM around it.
-    assert result.stdout == CARD + "Open it with: lima-ai shell preludian/myapp feat-a\n"
+    assert result.stdout == (
+        CARD
+        + "Open it with: lima-ai shell preludian/myapp feat-a\n"
+        + f"Backups: /backups in the VM is {env.cfg.backups_dir} on this Mac, read-write.\n"
+        + "docker-backup is installed in the VM; see https://lima-ai.readthedocs.io/docker-backups/\n"
+    )
     assert "mDNS" not in result.output
+
+
+def test_display_path_is_home_relative_and_quoted():
+    assert instance.display_path(Path.home() / "Developer/backups") == "~/Developer/backups"
+    assert instance.display_path(Path.home() / "My Dev/bk") == "~/'My Dev/bk'"
+    assert instance.display_path(Path("/tmp/bk")) == "/tmp/bk"
+
+
+def test_backups_notice_names_both_sides(env):
+    text = instance.backups_notice(env.cfg)
+    assert text.startswith(f"Backups: /backups in the VM is {env.cfg.backups_dir} on this Mac")
+    assert "https://lima-ai.readthedocs.io/docker-backups/" in text
 
 
 def test_hints_quote_a_project_path_with_spaces(env):
