@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from lima_ai.config import Config, config_dir, load_config, save_ssh_keys, state_dir
+from lima_ai.config import Config, config_dir, load_config, save_setting, save_ssh_keys, state_dir
 from lima_ai.errors import LimaAiError
 
 
@@ -62,6 +62,7 @@ def test_paths_expand_tilde(tmp_path):
     "text, key",
     [
         ("colour = 1\n", "colour"),
+        ("[base]\nhooks = 1\n", "base.hooks"),
         ("app_port = 8002\n", "app_port"),
         ("[vm]\ngpus = 1\n", "vm.gpus"),
         ("[network]\nx = 1\n", "network"),
@@ -177,3 +178,33 @@ def test_save_ssh_keys_refuses_to_write_a_broken_file(tmp_path):
     assert excinfo.value.step == "config"
     assert str(path) in excinfo.value.message
     assert path.read_text() == "app_port = \n"
+
+
+def test_base_hook_defaults_to_none(tmp_path):
+    assert load_config(tmp_path / "absent.toml").base.hook is None
+
+
+def test_base_hook_is_read_and_tilde_expanded(tmp_path):
+    cfg = load_config(write(tmp_path, '[base]\nhook = "~/lima/custom.sh"\n'))
+    assert cfg.base.hook == str(Path.home() / "lima/custom.sh")
+
+
+@pytest.mark.parametrize("text", ["[base]\nhook = 1\n", "[base]\nhook = true\n"])
+def test_base_hook_must_be_a_string(tmp_path, text):
+    with pytest.raises(LimaAiError) as excinfo:
+        load_config(write(tmp_path, text))
+    assert "'base.hook'" in excinfo.value.message
+    assert "a path string" in excinfo.value.message
+
+
+def test_save_setting_writes_a_string_under_a_new_table(tmp_path):
+    path = write(tmp_path, "[vm]\ncpus = 8\n")
+    save_setting("base", "hook", "/Users/jon/lima/custom.sh", path)
+    assert path.read_text() == '[vm]\ncpus = 8\n\n[base]\nhook = "/Users/jon/lima/custom.sh"\n'
+    assert load_config(path).base.hook == "/Users/jon/lima/custom.sh"
+
+
+def test_save_setting_fills_an_empty_table_with_commented_keys(tmp_path):
+    path = write(tmp_path, '[base]\n# hook = "~/lima/custom.sh"\n\n[sync]\n# ssh_keys = false\n')
+    save_setting("base", "hook", "/tmp/h.sh", path)
+    assert path.read_text() == '[base]\nhook = "/tmp/h.sh"\n# hook = "~/lima/custom.sh"\n\n[sync]\n# ssh_keys = false\n'

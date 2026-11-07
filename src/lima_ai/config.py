@@ -1,7 +1,10 @@
 import dataclasses
+import json
 import os
 import re
 import tomllib
+import types
+import typing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,15 +41,22 @@ class SyncConfig:
 
 
 @dataclass(frozen=True)
+class BaseConfig:
+    # A script `lima-ai base` runs as root in dev-base after its own provisioning; None: no hook.
+    hook: str | None = None
+
+
+@dataclass(frozen=True)
 class Config:
     developer_dir: Path = Path("~/Developer")
     backups_dir: Path = Path("~/Developer/backups/docker")
     vm: VmConfig = field(default_factory=VmConfig)
     versions: Versions = field(default_factory=Versions)
     sync: SyncConfig = field(default_factory=SyncConfig)
+    base: BaseConfig = field(default_factory=BaseConfig)
 
 
-SECTIONS = {"vm": VmConfig, "versions": Versions, "sync": SyncConfig}
+SECTIONS = {"vm": VmConfig, "versions": Versions, "sync": SyncConfig, "base": BaseConfig}
 
 
 def config_dir() -> Path:
@@ -78,80 +88,95 @@ def load_config(path: Path | None = None) -> Config:
         else:
             top[key] = value
     cfg = _build(Config, top, "", path, sections=set(SECTIONS))
+    hook = cfg.base.hook
     return dataclasses.replace(
         cfg,
         developer_dir=Path(cfg.developer_dir).expanduser(),
         backups_dir=Path(cfg.backups_dir).expanduser(),
+        base=dataclasses.replace(cfg.base, hook=str(Path(hook).expanduser()) if hook is not None else None),
     )
 
 
 def _build(cls, values: dict[str, Any], prefix: str, path: Path, sections: set[str] = frozenset()):
     defaults = cls()
-    known = {f.name for f in dataclasses.fields(cls)}
+    fields = {f.name: f for f in dataclasses.fields(cls)}
     kwargs = {}
     for key, value in values.items():
-        if key not in known:
+        if key not in fields:
             raise LimaAiError("config", f"unknown key '{prefix}{key}' in {path}")
         if key not in sections:
-            value = _check_type(getattr(defaults, key), value, f"{prefix}{key}", path)
+            expected = _expected_type(fields[key].type, getattr(defaults, key))
+            value = _check_type(expected, value, f"{prefix}{key}", path)
         kwargs[key] = value
     return cls(**kwargs)
 
 
-def _check_type(default: Any, value: Any, key: str, path: Path) -> Any:
-    if isinstance(default, Path):
+def _expected_type(annotation: Any, default: Any) -> type:
+    """The type a setting must have: its default's, or for `X | None` fields the X."""
+    if isinstance(annotation, types.UnionType):
+        return next(arg for arg in typing.get_args(annotation) if arg is not type(None))
+    if isinstance(annotation, type):
+        return annotation
+    return type(default)  # a generic alias such as tuple[str, ...]
+
+
+def _check_type(expected: type, value: Any, key: str, path: Path) -> Any:
+    if expected is Path:
         ok = isinstance(value, str)
         value = Path(value) if ok else value
-    elif isinstance(default, tuple):
+    elif expected is tuple:
         ok = isinstance(value, list) and all(isinstance(item, str) for item in value)
         value = tuple(value) if ok else value
-    elif default is None:
-        ok = isinstance(value, bool)
-    elif isinstance(default, bool) or isinstance(value, bool):
-        ok = type(value) is type(default)
+    elif expected is bool or isinstance(value, bool):
+        ok = type(value) is expected
     else:
-        ok = isinstance(value, type(default))
+        ok = isinstance(value, expected)
     if not ok:
-        raise LimaAiError("config", f"'{key}' in {path} must be {_type_name(default)}")
+        raise LimaAiError("config", f"'{key}' in {path} must be {_type_name(expected, key)}")
     return value
 
 
-def _type_name(default: Any) -> str:
-    if default is None:
+def _type_name(expected: type, key: str) -> str:
+    if expected is bool:
         return "true or false"
-    if isinstance(default, Path):
+    if expected is Path or key.endswith("hook"):
         return "a path string"
-    if isinstance(default, tuple):
+    if expected is tuple:
         return "a list of strings"
-    return {int: "an integer", str: "a string"}.get(type(default), type(default).__name__)
+    return {int: "an integer", str: "a string"}.get(expected, expected.__name__)
 
 
-_SYNC_HEADER = re.compile(r"^\s*\[\s*sync\s*\]", re.MULTILINE)
 _ANY_HEADER = re.compile(r"^\s*\[", re.MULTILINE)
-_SSH_KEYS_LINE = re.compile(r"^\s*ssh_keys\s*=.*$", re.MULTILINE)
 
 
-def save_ssh_keys(value: bool, path: Path | None = None) -> Path:
-    """Write `ssh_keys = true|false` under [sync] in config.toml, keeping everything else as written."""
+def save_setting(section: str, key: str, value: bool | str, path: Path | None = None) -> Path:
+    """Write `key = value` under [section] in config.toml, keeping everything else as written."""
     path = path or config_dir() / "config.toml"
     text = path.read_text() if path.exists() else ""
     if text and not text.endswith("\n"):
         text += "\n"
-    line = f"ssh_keys = {str(value).lower()}\n"
-    header = _SYNC_HEADER.search(text)
+    rendered = str(value).lower() if isinstance(value, bool) else json.dumps(value)
+    line = f"{key} = {rendered}\n"
+    header = re.search(rf"^\s*\[\s*{re.escape(section)}\s*\]", text, re.MULTILINE)
     if header is None:
-        text += ("\n" if text else "") + "[sync]\n" + line
+        text += ("\n" if text else "") + f"[{section}]\n" + line
     else:
         # The table body runs from the line after its header to the next header (or the end).
         start = text.index("\n", header.end()) + 1
         following = _ANY_HEADER.search(text, start)
         end = following.start() if following else len(text)
-        body = _SSH_KEYS_LINE.sub("", text[start:end], count=1).lstrip("\n")
+        key_line = re.compile(rf"^\s*{re.escape(key)}\s*=.*$", re.MULTILINE)
+        body = key_line.sub("", text[start:end], count=1).lstrip("\n")
         text = text[:start] + line + body + text[end:]
     try:
         tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
-        raise LimaAiError("config", f"{path}: cannot add ssh_keys, fix the file first ({exc})") from None
+        raise LimaAiError("config", f"{path}: cannot add {key}, fix the file first ({exc})") from None
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
     return path
+
+
+def save_ssh_keys(value: bool, path: Path | None = None) -> Path:
+    """Write `ssh_keys = true|false` under [sync] in config.toml."""
+    return save_setting("sync", "ssh_keys", value, path)
