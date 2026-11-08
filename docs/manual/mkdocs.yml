@@ -2,7 +2,9 @@ site_name: lima-ai
 site_description: Disposable Lima VMs for running Claude Code agents in parallel, one workspace per VM
 site_url: https://lima-ai.readthedocs.io/
 site_author: Jon Trigueiro
-copyright: Copyright &copy; 2026 Jon Trigueiro — GPLv3 or later
+copyright: >-
+  Copyright &copy; 2026 Jon Trigueiro — GPLv3 or later —
+  <a href="#__consent">Change cookie settings</a>
 
 repo_url: https://github.com/joepreludian/lima-ai
 repo_name: joepreludian/lima-ai
@@ -90,6 +92,17 @@ extra:
   analytics:
     provider: google
     property: G-GN405N8JQ2
+  # Analytics loads only after the visitor accepts; the footer link reopens the banner.
+  consent:
+    title: Cookie consent
+    description: >-
+      This site uses cookies to count visits and see which pages help and
+      which do not. Nothing here is sold or shared beyond Google Analytics.
+      Accept to help improve the manual, or reject and the site works the same.
+    actions:
+      - accept
+      - reject
+      - manage
 
 # Turn link and nav mistakes into warnings, which fail_on_warning promotes to
 # build failures on Read the Docs.
