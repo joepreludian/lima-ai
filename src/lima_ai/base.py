@@ -22,29 +22,40 @@ def banner(rebuild: bool, hook: Hook | None) -> str:
     if rebuild:
         command += " --rebuild"
     if hook is None:
-        hook_line = "hook:  none (lima-ai base --init-hook PATH writes a starter)"
+        hook_line, note = "hook:  none (lima-ai base --init-hook PATH writes a starter)", ""
     elif hook.source == "flag":
-        hook_line = f"hook:  {hook.display}  (from --use-hook, saved to config.toml)"
+        hook_line, note = f"hook:  {hook.display}", "(from --use-hook, saved to config.toml)"
     else:
-        hook_line = f"hook:  {hook.display}  (from config.toml)"
+        hook_line, note = f"hook:  {hook.display}", "(from config.toml)"
     lima_home = os.environ.get("LIMA_HOME") or "~/.lima"
-    lines = [
-        command,
-        hook_line,
-        f"logs:  output streams below; Lima's own logs are in {lima_home}/{BASE_INSTANCE}/",
-        "       (serialv.log has the provisioning output, ha.stderr.log the host side)",
-        f"debug: if a step fails {BASE_INSTANCE} is left running: limactl shell {BASE_INSTANCE}",
-    ]
     # Long values (a hook path outside $HOME) wrap under their label instead of widening the box.
     wrapped = [
-        part
-        for line in lines
-        for part in textwrap.wrap(line, BANNER_WIDTH - 4, subsequent_indent=" " * 7, break_on_hyphens=False)
+        *_wrap(command),
+        *_wrap_with_note(hook_line, note),
+        *_wrap(f"logs:  output streams below; Lima's own logs are in {lima_home}/{BASE_INSTANCE}/"),
+        "       (serialv.log has the provisioning output, ha.stderr.log the host side)",
+        f"debug: if a step fails {BASE_INSTANCE} is left running: limactl shell {BASE_INSTANCE}",
     ]
     width = max(len(line) for line in wrapped)
     top = "┌" + "─" * (width + 2) + "┐"
     bottom = "└" + "─" * (width + 2) + "┘"
     return "\n".join([top, *(f"│ {line.ljust(width)} │" for line in wrapped), bottom])
+
+
+def _wrap(line: str) -> list[str]:
+    return textwrap.wrap(line, BANNER_WIDTH - 4, subsequent_indent=" " * 7, break_on_hyphens=False)
+
+
+def _wrap_with_note(line: str, note: str) -> list[str]:
+    """Wrap `line`, then add `note` whole: after the last part when it fits, else on its own indented line."""
+    parts = _wrap(line)
+    if not note:
+        return parts
+    if len(parts[-1]) + 2 + len(note) <= BANNER_WIDTH - 4:
+        parts[-1] += "  " + note
+    else:
+        parts.append(" " * 7 + note)
+    return parts
 
 
 def build(cfg: Config, runner: Runner, rebuild: bool, hook: Hook | None = None) -> None:

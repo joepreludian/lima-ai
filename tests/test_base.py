@@ -105,6 +105,16 @@ def test_existing_base_refusal_mentions_a_saved_flag_hook(cfg, hook):
     assert "hook saved" not in excinfo.value.message
 
 
+@pytest.mark.parametrize("length", [20, 50, 60, 70, 82, 120])
+def test_banner_keeps_the_hook_note_whole_whatever_the_path_length(length, monkeypatch):
+    monkeypatch.delenv("LIMA_HOME", raising=False)
+    path = Path("/" + "x" * (length - 9) + "/hook.sh")
+    text = banner(rebuild=True, hook=Hook(path=path, source="flag", content=HOOK_TEXT))
+    assert len({len(line) for line in text.splitlines()}) == 1  # a straight box
+    assert "(from --use-hook, saved to config.toml)" in text
+    assert all(len(line) <= 100 for line in text.splitlines())
+
+
 def test_banner_names_the_hook_source_and_the_logs(hook, monkeypatch):
     monkeypatch.delenv("LIMA_HOME", raising=False)
     text = banner(rebuild=True, hook=hook)
