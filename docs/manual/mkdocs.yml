@@ -12,6 +12,7 @@ edit_uri: edit/main/docs/manual/docs/
 
 theme:
   name: material
+  custom_dir: overrides
   language: en
   icon:
     repo: fontawesome/brands/github
@@ -89,15 +90,16 @@ plugins:
   - search
 
 extra:
+  # Google Tag Manager, through overrides/partials/integrations/analytics/custom.html.
+  # It loads only after the visitor accepts; the footer link reopens the banner.
   analytics:
-    provider: google
-    property: G-GN405N8JQ2
-  # Analytics loads only after the visitor accepts; the footer link reopens the banner.
+    provider: custom
+    property: GTM-W7DMNSDR
   consent:
     title: Cookie consent
     description: >-
       This site uses cookies to count visits and see which pages help and
-      which do not. Nothing here is sold or shared beyond Google Analytics.
+      which do not. Nothing here is sold or shared beyond Google Tag Manager.
       Accept to help improve the manual, or reject and the site works the same.
     actions:
       - accept

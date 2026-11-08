@@ -1,0 +1,18 @@
+{#-
+  Google Tag Manager. Material calls __md_analytics() only after the visitor
+  accepts the consent banner (see extra.consent in mkdocs.yml), so nothing is
+  loaded before that. The container id lives in mkdocs.yml as
+  extra.analytics.property.
+-#}
+{% set container = config.extra.analytics.property %}
+<script id="__analytics">
+  function __md_analytics() {
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag("js", new Date());
+    var script = document.createElement("script");
+    script.async = true;
+    script.src = "https://www.googletagmanager.com/gtm.js?id={{ container }}";
+    document.getElementById("__analytics").insertAdjacentElement("afterEnd", script);
+  }
+</script>
