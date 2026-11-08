@@ -4,16 +4,38 @@ This walk-through runs two workspaces of the project at
 `~/Developer/preludian/myapp` side by side. Substitute your own project path:
 it is always a folder relative to `~/Developer`.
 
-### 1. Load your SSH key (every login)
+### 1. Install lima-ai (once)
 
 ```bash
-ssh-add -l || ssh-add --apple-use-keychain ~/.ssh/id_ed25519
+uv tool install lima-ai      # or: brew install joepreludian/tap/lima-ai
 ```
 
-VMs never receive your key. `git push` inside a VM borrows it through the
-forwarded agent, so the agent needs the key loaded.
+The [Installation](install.md) page lists the requirements and the other
+ways to install, including a self-contained executable with no Python.
 
-### 2. Give lima-ai a Claude token (once)
+### 2. Check the dependencies
+
+```bash
+lima-ai doctor
+```
+
+This checks for Lima, Rosetta, rsync, Claude Code and a key in your SSH
+agent, and prints the fix next to anything missing. Two rows are expected
+to be flagged at this point: the Claude token and `dev-base`, which the next
+two steps provide.
+
+### 3. Load your SSH key (optional)
+
+```bash
+ssh-add -l || ssh-add ~/.ssh/id_ed25519
+```
+
+Skip this if you will not push from inside a VM. VMs never receive your
+key: `git push` in a VM borrows it through the forwarded agent, so the agent
+on the Mac needs the key loaded. Doctor flags this as `ssh-agent key` when
+nothing is loaded.
+
+### 4. Give lima-ai a Claude token (once)
 
 ```bash
 lima-ai auth
@@ -24,7 +46,7 @@ and prints a long-lived token. Paste it at the prompt (input is hidden). It is s
 `~/.config/lima-ai/oauth-token` with mode 600 and copied into each VM over
 stdin, so it never shows up in a process list.
 
-### 3. Build the base VM (once)
+### 5. Build the base VM (once)
 
 ```bash
 lima-ai base
@@ -35,7 +57,7 @@ This takes about 5–10 minutes. The first run also downloads the Ubuntu
 Rebuild it later with `lima-ai base --rebuild`; existing workspace VMs are not
 affected.
 
-### 4. Create a workspace VM
+### 6. Create a workspace VM
 
 ```bash
 lima-ai new
@@ -86,7 +108,7 @@ Open a shell in it now? [Y/n]:
 If the project folder has no git repository, `new` says so: no branch is
 created, and `destroy` cannot check that VM for unsaved work.
 
-### 5. Work inside it
+### 7. Work inside it
 
 ```bash
 lima-ai shell preludian/myapp feat-login
@@ -107,7 +129,7 @@ need to tell you where the app runs. Ports published by `docker compose` listen 
 every interface, so they are reachable. A server you start by hand must bind
 `0.0.0.0` rather than `127.0.0.1` to be reachable from the Mac.
 
-### 6. Start a second workspace in parallel
+### 8. Start a second workspace in parallel
 
 ```bash
 lima-ai new preludian/myapp feat-billing --branch feat/billing
@@ -122,7 +144,7 @@ preludian/myapp  feat-login    Running  feat-login    lima-dev-myapp-feat-login.
 
 Both apps can now run on the same port, each at its own address.
 
-### 7. Ship the work
+### 9. Ship the work
 
 Inside the VM, commit and push as usual. Git uses your name, email and
 aliases from the Mac.
@@ -133,7 +155,7 @@ git push -u origin feat-login
 
 Then open a pull request, or fetch the branch into your host checkout.
 
-### 8. Clean up
+### 10. Clean up
 
 ```bash
 lima-ai destroy preludian/myapp feat-login
