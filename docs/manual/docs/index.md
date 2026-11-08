@@ -122,7 +122,7 @@ flowchart LR
 | Reach services on your Mac | yes: `host.lima.internal` reaches your Mac's `localhost`, like any Lima VM |
 | Use your SSH key | yes, through the forwarded `ssh-agent` while an SSH connection to the VM is open; the key file never enters the VM |
 | Use AWS | yes, with the config and SSO token copied from your Mac when you say yes; refresh with `sync-claude` or `aws sso login --use-device-code` in the VM |
-| Use Claude | with a long-lived token from `claude setup-token` (your Max subscription) |
+| Use Claude | with a long-lived token from `claude setup-token` (any Claude subscription) |
 
 !!! warning
     Anything the agent pushes to a git remote leaves the VM, so review
