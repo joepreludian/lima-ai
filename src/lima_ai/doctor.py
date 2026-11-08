@@ -2,12 +2,14 @@ import platform
 import re
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 import click
 
 from lima_ai import auth
 from lima_ai.config import load_config
 from lima_ai.errors import LimaAiError
+from lima_ai.gitconfig import find_private_keys
 from lima_ai.limactl import Limactl
 from lima_ai.naming import BASE_INSTANCE
 from lima_ai.runner import Runner
@@ -31,8 +33,11 @@ class Check:
     fix: str = ""
 
 
-def run_checks(runner: Runner, system: str | None = None, machine: str | None = None) -> list[Check]:
+def run_checks(
+    runner: Runner, system: str | None = None, machine: str | None = None, home: Path | None = None
+) -> list[Check]:
     """Every check, in the order `doctor` prints them; none of them raises."""
+    home = home or Path.home()
     system = system or platform.system()
     machine = machine or platform.machine()
     return [
@@ -42,7 +47,7 @@ def run_checks(runner: Runner, system: str | None = None, machine: str | None = 
         check_tool("rsync"),
         check_tool("claude"),
         check_optional_tool("fzf", "brew install fzf"),
-        check_ssh_agent(runner),
+        check_ssh_key(runner, home),
         check_config(),
         check_token(),
         check_dev_base(runner),
@@ -100,15 +105,20 @@ def _check_version(runner: Runner, tool: str, minimum: tuple[int, ...], severity
     return Check(name, "ok", found)
 
 
-def check_ssh_agent(runner: Runner) -> Check:
-    name = "ssh-agent key"
-    if not shutil.which("ssh-add"):
-        return Check(name, "fail", "ssh-add not found on PATH", "install OpenSSH")
-    result = runner.run(["ssh-add", "-l"], check=False)
-    keys = len(result.stdout.strip().splitlines()) if result.returncode == 0 else 0
-    if keys:
-        return Check(name, "ok", f"{keys} key" + ("s" if keys > 1 else ""))
-    return Check(name, "fail", "no key loaded", "ssh-add ~/.ssh/<your key>")
+def check_ssh_key(runner: Runner, home: Path) -> Check:
+    """A key in the agent or a key file in ~/.ssh. Neither is only a warning: it matters for git push from a VM."""
+    name = "SSH key"
+    loaded = 0
+    if shutil.which("ssh-add"):
+        result = runner.run(["ssh-add", "-l"], check=False)
+        loaded = len(result.stdout.strip().splitlines()) if result.returncode == 0 else 0
+    if loaded:
+        return Check(name, "ok", _plural(loaded, "key") + " in the agent")
+    files = find_private_keys(home)
+    if files:
+        return Check(name, "ok", ", ".join(f.name for f in files) + " in ~/.ssh, none in the agent")
+    fix = "optional, to git push from a VM: ssh-keygen -t ed25519, or ssh-add your key"
+    return Check(name, "warn", "none in ~/.ssh or the agent", fix)
 
 
 def check_config() -> Check:

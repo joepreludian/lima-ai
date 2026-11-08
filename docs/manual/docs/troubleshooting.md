@@ -1,7 +1,7 @@
 # Troubleshooting
 
 Start with `lima-ai doctor`. It checks the platform, Rosetta, Lima,
-rsync, Claude Code, your SSH agent, `config.toml`, the Claude token,
+rsync, Claude Code, your SSH key, `config.toml`, the Claude token,
 `dev-base` and docker-backup, then lists each problem with the command
 that fixes it.
 
@@ -31,7 +31,9 @@ the token your Mac had when the VM was created or last synced. Run
 inside the VM with `aws sso login --use-device-code`.
 
 **`git push` fails with "Permission denied (publickey)".** Load your key on
-the Mac (`ssh-add -l` should list it), then open a new `lima-ai shell`.
+the Mac (`ssh-add -l` should list it), then open a new `lima-ai shell`; or
+set `ssh_keys = true` under `[sync]` in `config.toml` and run `sync-claude`
+so the VM gets its own copy.
 
 **Compose warns "volume … was not created by Docker Compose" after a
 restore.** This is harmless. Restored volumes don't carry compose's labels,

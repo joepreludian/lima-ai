@@ -30,10 +30,11 @@ two steps provide.
 ssh-add -l || ssh-add ~/.ssh/id_ed25519
 ```
 
-Skip this if you will not push from inside a VM. VMs never receive your
-key: `git push` in a VM borrows it through the forwarded agent, so the agent
-on the Mac needs the key loaded. Doctor flags this as `ssh-agent key` when
-nothing is loaded.
+Skip this if you will not push from inside a VM. `git push` in a VM borrows
+the key through the forwarded agent, so the agent on the Mac needs it
+loaded; the alternative is to let `new` copy your `~/.ssh` private keys into
+the VM when it asks (see [Everyday tasks](everyday.md)). Doctor's `SSH key`
+row shows which of the two you have.
 
 ### 4. Give lima-ai a Claude token (once)
 

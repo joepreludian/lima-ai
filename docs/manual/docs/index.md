@@ -120,7 +120,7 @@ flowchart LR
 | Write to your Mac's files | only `~/Developer/backups/docker` (mounted at `/backups`) |
 | Expose ports on your Mac's `localhost` | no: no VM port is forwarded to your Mac |
 | Reach services on your Mac | yes: `host.lima.internal` reaches your Mac's `localhost`, like any Lima VM |
-| Use your SSH key | yes, through the forwarded `ssh-agent` while an SSH connection to the VM is open; the key file never enters the VM |
+| Use your SSH key | yes, through the forwarded `ssh-agent` while an SSH connection to the VM is open; the key file enters the VM only if you say yes when `new` offers to copy it |
 | Use AWS | yes, with the config and SSO token copied from your Mac when you say yes; refresh with `sync-claude` or `aws sso login --use-device-code` in the VM |
 | Use Claude | with a long-lived token from `claude setup-token` (any Claude subscription) |
 

@@ -39,8 +39,9 @@ class Host:
     def remove(self, tool):
         os.remove(self.bin_dir / tool)
 
-    def checks(self, system="Darwin", machine="arm64"):
-        return {c.name: c for c in doctor.run_checks(self.runner, system=system, machine=machine)}
+    def checks(self, system="Darwin", machine="arm64", home=None):
+        home = home or self.bin_dir.parent / "home"
+        return {c.name: c for c in doctor.run_checks(self.runner, system=system, machine=machine, home=home)}
 
 
 def base_json(status):
@@ -51,7 +52,7 @@ def test_healthy_mac_passes_every_check(host):
     checks = host.checks()
     assert {c.status for c in checks.values()} == {"ok"}
     assert checks["limactl (>= 2.0)"].detail == "2.2.1"
-    assert checks["ssh-agent key"].detail == "1 key"
+    assert checks["SSH key"].detail == "1 key in the agent"
 
 
 @pytest.mark.parametrize(
@@ -95,11 +96,29 @@ def test_missing_limactl_skips_dev_base(host):
     assert host.checks()["dev-base"].status == "skip"
 
 
-def test_ssh_agent_without_keys_fails(host):
+def test_key_file_without_agent_passes(host, tmp_path):
     host.runner.on("ssh-add -l", "The agent has no identities.\n", returncode=1)
-    check = host.checks()["ssh-agent key"]
-    assert check.status == "fail"
+    ssh_dir = tmp_path / "home/.ssh"
+    ssh_dir.mkdir(parents=True)
+    (ssh_dir / "id_ed25519").write_bytes(b"-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n")
+    (ssh_dir / "id_ed25519.pub").write_text("ssh-ed25519 AAAA jon@mac\n")
+    check = host.checks()["SSH key"]
+    assert check.status == "ok"
+    assert check.detail == "id_ed25519 in ~/.ssh, none in the agent"
+
+
+def test_no_key_anywhere_warns(host):
+    host.runner.on("ssh-add -l", "The agent has no identities.\n", returncode=1)
+    check = host.checks()["SSH key"]
+    assert check.status == "warn"
+    assert "ssh-keygen" in check.fix
     assert "ssh-add" in check.fix
+
+
+def test_missing_ssh_add_is_not_fatal(host):
+    host.remove("ssh-add")
+    check = host.checks()["SSH key"]
+    assert check.status == "warn"
 
 
 def test_broken_config_fails(host, tmp_path):
