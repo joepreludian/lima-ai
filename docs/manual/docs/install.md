@@ -7,7 +7,7 @@
 - Rosetta, for running `linux/amd64` images:
   `softwareupdate --install-rosetta --agree-to-license`
 - Claude Code on the Mac, signed in with a Claude subscription (any plan)
-- An SSH key loaded in `ssh-agent`, so git over SSH works in the VMs
+- Optional: an SSH key loaded in `ssh-agent`, to `git push` from inside a VM
 - [uv](https://docs.astral.sh/uv/) (or pipx), to install lima-ai from PyPI or from source
   (not needed with Homebrew)
 - Optional: [docker-backup](https://docker-backup.readthedocs.io) 0.4.0 or

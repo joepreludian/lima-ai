@@ -53,7 +53,7 @@ The manual is at **https://lima-ai.readthedocs.io/**:
 - Rosetta, for running `linux/amd64` images:
   `softwareupdate --install-rosetta --agree-to-license`
 - Claude Code on the Mac, signed in with a Claude subscription (any plan)
-- An SSH key loaded in `ssh-agent`, so git over SSH works in the VMs
+- Optional: an SSH key loaded in `ssh-agent`, to `git push` from inside a VM
 - [uv](https://docs.astral.sh/uv/), to install lima-ai from PyPI or from source
   (not needed with Homebrew)
 - Optional: [docker-backup](https://docker-backup.readthedocs.io) 0.4.0 or
@@ -81,9 +81,20 @@ with `uv tool install .` or `make pex`. The
 [Installation](https://lima-ai.readthedocs.io/install/) page covers
 all of these.
 
-Check it with `lima-ai --version`, then run `lima-ai doctor` to see what
-else is missing. Upgrading from 0.12 or earlier? Run `lima-ai base --rebuild`:
-VMs now mount the backups folder at `/backups` and ship the AWS CLI.
+Then, in order:
+
+```bash
+lima-ai doctor                           # what is still missing, with the fix for each
+ssh-add -l || ssh-add ~/.ssh/id_ed25519  # optional: only to git push from inside a VM
+lima-ai auth                             # once: store a Claude token
+lima-ai base                             # once: build dev-base (5-10 minutes)
+lima-ai new preludian/myapp feat-login   # a workspace VM, then lima-ai shell to get in
+```
+
+The [Quickstart](https://lima-ai.readthedocs.io/quickstart/) walks through
+these with two workspaces side by side. Upgrading from 0.12 or earlier? Run
+`lima-ai base --rebuild`: VMs now mount the backups folder at `/backups` and
+ship the AWS CLI.
 
 ## Development
 
