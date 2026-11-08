@@ -86,6 +86,11 @@ markdown_extensions:
 plugins:
   - search
 
+extra:
+  analytics:
+    provider: google
+    property: G-GN405N8JQ2
+
 # Turn link and nav mistakes into warnings, which fail_on_warning promotes to
 # build failures on Read the Docs.
 validation:
