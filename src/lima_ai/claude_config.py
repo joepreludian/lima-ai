@@ -19,8 +19,8 @@ INCLUDE_FILES = ("CLAUDE.md", "RTK.md", "settings.json", "statusline-command.sh"
 INCLUDE_DIRS = ("skills", "plugins", "commands", "agents")
 INCLUDE = INCLUDE_FILES + INCLUDE_DIRS
 
-# Characters that end a path inside a shell command.
-_PATH_CHARS = r"[^\s'\";|&()<>]*"
+# An unquoted path inside a shell command: it ends at whitespace or a shell operator, unless escaped.
+_UNQUOTED_PATH = re.compile(r"(?:\\.|[^\s'\";|&()<>\\])*")
 
 
 def filter_options() -> list[str]:
@@ -43,7 +43,16 @@ def _home_relative(path: str, host_home: str) -> str | None:
 def _referenced_home_paths(command: str, host_home: str) -> list[str]:
     """Paths under the host home in a command, relative to it (/Users/x/…, ~/…, $HOME/…)."""
     prefixes = rf"{re.escape(host_home.rstrip('/'))}|(?<![\w~])~|\$HOME|\$\{{HOME\}}"
-    return [match[1][1:] for match in re.finditer(rf"(?:{prefixes})(/{_PATH_CHARS})", command)]
+    paths = []
+    for match in re.finditer(rf"(['\"]?)(?:{prefixes})/", command):
+        quote, start = match[1], match.end()
+        closing = command.find(quote, start) if quote else -1
+        if closing != -1:
+            paths.append(command[start:closing])  # quoted: spaces and all, up to the closing quote
+        else:
+            unquoted = _UNQUOTED_PATH.match(command, start)[0]
+            paths.append(re.sub(r"\\(.)", r"\1", unquoted))  # `My\ Scripts` is `My Scripts`
+    return paths
 
 
 def _available_in_guest(relative: str, developer_rel: str | None) -> bool:
@@ -89,13 +98,18 @@ def offered_hooks(settings: dict, host_home: str, developer_dir: str) -> list[Ho
                 if not isinstance(command, str):
                     continue
                 missing = _missing_in_guest(command, host_home, developer_rel)
-                if not missing or not all((Path(host_home) / path).is_file() for path in missing):
+                if not missing or not all(_copyable(host_home, path) for path in missing):
                     continue
                 files[command] = tuple(missing)
                 seen = events.setdefault(command, [])
                 if label not in seen:
                     seen.append(label)
     return [HookChoice(command, tuple(events[command]), files[command]) for command in events]
+
+
+def _copyable(host_home: str, relative: str) -> bool:
+    """A file under the host home, named without `..` steps (rsync --relative refuses those)."""
+    return ".." not in Path(relative).parts and (Path(host_home) / relative).is_file()
 
 
 def display_command(command: str, host_home: str) -> str:
@@ -212,11 +226,12 @@ def push_claude_config(
         )
         if kept:
             # Paths relative to the host home, so each script lands at the same place under the guest home.
-            # openrsync ignores the /./ anchor, hence cwd.
+            # openrsync ignores the /./ anchor, hence cwd. --no-implied-dirs: folders that already exist
+            # in the guest (~/.claude) keep their own mode and times.
             files = sorted({path for choice in kept for path in choice.files})
             home_dest = f"{ssh_host(instance.name)}:"
             runner.run(
-                rsync_argv(files, home_dest, instance.ssh_config, ["--relative", "--copy-links"]),
+                rsync_argv(files, home_dest, instance.ssh_config, ["--relative", "--no-implied-dirs", "--copy-links"]),
                 step="sync-claude",
                 cwd=host_home,
             )

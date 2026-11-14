@@ -263,3 +263,24 @@ def test_save_hooks_keeps_characters_outside_ascii(tmp_path):
     command = '~/.x/n.sh "done 🎉 olá"'
     save_hooks([command], [], path)
     assert load_config(path).sync.hooks == (command,)
+
+
+def test_save_hooks_writes_nothing_when_either_list_cannot_be_saved(tmp_path):
+    original = '[sync]\nhooks = ["a"]\nhooks_skipped = [\n  "b",\n]\n'
+    path = write(tmp_path, original)
+    with pytest.raises(LimaAiError, match="fix the file first"):
+        save_hooks(["c"], [], path)
+    assert path.read_text() == original
+
+
+def test_saving_an_existing_key_keeps_its_place_and_its_comment(tmp_path):
+    path = write(tmp_path, '[sync]\nextra_excludes = ["x"]\nssh_keys = true  # work laptop\nhooks = ["a # b"] # mine\n')
+    save_ssh_keys(False, path)
+    save_hooks(["c"], ["d"], path)
+    assert path.read_text().splitlines() == [
+        "[sync]",
+        'hooks_skipped = ["d"]',
+        'extra_excludes = ["x"]',
+        "ssh_keys = false  # work laptop",
+        'hooks = ["c"]  # mine',
+    ]

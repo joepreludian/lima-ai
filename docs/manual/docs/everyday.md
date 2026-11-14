@@ -55,12 +55,16 @@ variant, and how to move data to and from the Mac's Docker.
   receive, such as a script in `~/.claude/hooks/`. The first time `new` or
   `sync-claude` finds such hooks, it shows them in a checklist, one row per
   command with the events it runs on; a hook is listed only when what it
-  runs is a file on your Mac. Ticked hooks stay in the VM's
+  runs is a file on your Mac. A path with a space counts when the command
+  quotes or escapes it, as the shell needs; a path with a `..` step is
+  never listed. Ticked hooks stay in the VM's
   `settings.json`, and their script files are copied to the same place
-  under the VM's home. The answer is saved as `hooks` (ticked) and
+  under the VM's home; folders that already exist there keep their own
+  permissions. The answer is saved as `hooks` (ticked) and
   `hooks_skipped` (declined) under `[sync]` in `config.toml` and reused for
   every VM; you are asked again only when a hook appears that is in neither
-  list. `--hooks` shows the checklist again, `--no-hooks` copies none for
+  list. `--hooks` shows the checklist again (or says there is nothing to choose
+  from), `--no-hooks` copies none for
   that run and saves nothing, and outside a terminal nothing is asked and
   the saved list applies. Only the script file itself is copied: a script
   that needs files next to it, other programs, or something running on

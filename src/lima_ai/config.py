@@ -169,10 +169,28 @@ def save_setting(section: str, key: str, value: bool | str | Sequence[str], path
 
     A list or tuple of strings is written as a one-line array.
     """
+    return save_settings(section, {key: value}, path)
+
+
+def save_settings(section: str, values: dict[str, bool | str | Sequence[str]], path: Path | None = None) -> Path:
+    """Write several keys under [section] in config.toml: all of them, or (when the result would not parse) none."""
     path = path or config_dir() / "config.toml"
     text = path.read_text() if path.exists() else ""
     if text and not text.endswith("\n"):
         text += "\n"
+    for key, value in values.items():
+        text = _with_setting(text, section, key, value)
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise LimaAiError("config", f"{path}: cannot add {', '.join(values)}, fix the file first ({exc})") from None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+def _with_setting(text: str, section: str, key: str, value: bool | str | Sequence[str]) -> str:
+    """text with `key = value` under [section]: in place when the key is there, else first in the table."""
     if isinstance(value, bool):
         rendered = str(value).lower()
     elif isinstance(value, str):
@@ -180,25 +198,35 @@ def save_setting(section: str, key: str, value: bool | str | Sequence[str], path
     else:
         # Not ASCII-escaped: JSON writes an emoji as a surrogate pair, which TOML rejects.
         rendered = "[" + ", ".join(json.dumps(item, ensure_ascii=False) for item in value) + "]"
-    line = f"{key} = {rendered}\n"
+    line = f"{key} = {rendered}"
     header = re.search(rf"^\s*\[\s*{re.escape(section)}\s*\]", text, re.MULTILINE)
     if header is None:
-        text += ("\n" if text else "") + f"[{section}]\n" + line
+        return text + ("\n" if text else "") + f"[{section}]\n{line}\n"
+    # The table body runs from the line after its header to the next header (or the end).
+    start = text.index("\n", header.end()) + 1
+    following = _ANY_HEADER.search(text, start)
+    end = following.start() if following else len(text)
+    body = text[start:end]
+    existing = re.search(rf"^\s*{re.escape(key)}\s*=.*$", body, re.MULTILINE)
+    if existing is None:
+        body = line + "\n" + body.lstrip("\n")
     else:
-        # The table body runs from the line after its header to the next header (or the end).
-        start = text.index("\n", header.end()) + 1
-        following = _ANY_HEADER.search(text, start)
-        end = following.start() if following else len(text)
-        key_line = re.compile(rf"^\s*{re.escape(key)}\s*=.*$", re.MULTILINE)
-        body = key_line.sub("", text[start:end], count=1).lstrip("\n")
-        text = text[:start] + line + body + text[end:]
-    try:
-        tomllib.loads(text)
-    except tomllib.TOMLDecodeError as exc:
-        raise LimaAiError("config", f"{path}: cannot add {key}, fix the file first ({exc})") from None
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
-    return path
+        comment = _inline_comment(existing.group(0))
+        body = body[: existing.start()] + line + (f"  {comment}" if comment else "") + body[existing.end() :]
+    return text[:start] + body + text[end:]
+
+
+def _inline_comment(line: str) -> str:
+    """The `# ...` that follows the value on a `key = value` line; "" when there is none."""
+    for index, char in enumerate(line):
+        if char != "#":
+            continue
+        try:
+            tomllib.loads(line[:index])
+        except tomllib.TOMLDecodeError:
+            continue  # this # is inside the value
+        return line[index:].rstrip()
+    return ""
 
 
 def save_ssh_keys(value: bool, path: Path | None = None) -> Path:
@@ -208,5 +236,4 @@ def save_ssh_keys(value: bool, path: Path | None = None) -> Path:
 
 def save_hooks(hooks: Sequence[str], skipped: Sequence[str], path: Path | None = None) -> Path:
     """Write the chosen and the declined hook commands under [sync] in config.toml."""
-    save_setting("sync", "hooks", hooks, path)
-    return save_setting("sync", "hooks_skipped", skipped, path)
+    return save_settings("sync", {"hooks": hooks, "hooks_skipped": skipped}, path)

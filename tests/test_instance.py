@@ -1444,3 +1444,18 @@ def test_one_argument_is_a_usage_error(env, command):
     result = env.invoke([command, "preludian/myapp"])
     assert result.exit_code == 2
     assert "both PROJECT and WORKSPACE" in result.output
+
+
+def test_hooks_flag_says_so_when_no_hook_is_offered(env, monkeypatch):
+    asked = answer_checklist(monkeypatch, [])
+    result = sync_claude_hooks(env, "--hooks")
+    assert result.exit_code == 0, result.output
+    assert asked == []
+    assert "--hooks: no host hook to choose from" in result.output
+
+
+def test_hooks_help_says_which_flag_asks(env):
+    result = env.invoke(["sync-claude", "--help"])
+    text = " ".join(result.output.split())
+    assert "--hooks shows the hook checklist again" in text
+    assert "--no-hooks copies none this time and saves nothing" in text

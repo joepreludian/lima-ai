@@ -309,3 +309,35 @@ def test_push_without_kept_hooks_runs_no_extra_rsync(tmp_path, capsys):
 def test_filter_hooks_leaves_shapes_it_does_not_know_alone(tmp_path, hooks):
     home, dev = hook_home(tmp_path)
     assert filter_hooks({"hooks": hooks}, home, dev, keep={"x"}) == {"hooks": hooks}
+
+
+def test_a_quoted_or_escaped_path_with_a_space_is_offered_whole(tmp_path):
+    home, dev = hook_home(tmp_path)
+    (Path(home) / "My Scripts").mkdir()
+    (Path(home) / "My Scripts/a.sh").write_text("#!/bin/sh\n")
+    quoted, single, escaped = f'"{home}/My Scripts/a.sh" --go', "'~/My Scripts/a.sh'", f"{home}/My\\ Scripts/a.sh"
+    settings = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": c} for c in (quoted, single, escaped)]}]}}
+    assert offered_hooks(settings, home, dev) == [
+        HookChoice(command, ("Stop",), ("My Scripts/a.sh",)) for command in (quoted, single, escaped)
+    ]
+
+
+def test_an_unquoted_path_with_a_space_is_what_the_shell_would_run(tmp_path):
+    home, dev = hook_home(tmp_path)
+    (Path(home) / "My").write_text("#!/bin/sh\n")
+    settings = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": f"{home}/My Scripts/a.sh"}]}]}}
+    assert offered_hooks(settings, home, dev) == [HookChoice(f"{home}/My Scripts/a.sh", ("Stop",), ("My",))]
+
+
+def test_a_path_with_a_parent_step_is_not_offered(tmp_path):
+    home, dev = hook_home(tmp_path)
+    commands_ = [f"{home}/.claude-display/../.claude-display/push-event.sh", "~/../outside.sh"]
+    settings = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": c} for c in commands_]}]}}
+    assert offered_hooks(settings, home, dev) == []
+    assert filter_hooks(settings, home, dev) == {"hooks": {}}
+
+
+def test_push_leaves_existing_guest_directories_as_they_are(tmp_path):
+    runner = push(tmp_path, [f"{tmp_path}/home/.claude/hooks/block.sh"])
+    [call] = runner.find("--relative")
+    assert "--no-implied-dirs" in call.argv

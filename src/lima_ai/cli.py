@@ -104,6 +104,8 @@ def hooks_wanted(app: App, flag: bool | None) -> tuple[str, ...]:
     choices = offered_hooks(read_settings(app.home / ".claude"), str(app.home), str(app.config.developer_dir))
     offered = [choice.command for choice in choices]
     if not offered:
+        if flag is True:
+            click.echo("--hooks: no host hook to choose from; none is left out of the VM", err=True)
         return ()
     saved, skipped = app.config.sync.hooks, app.config.sync.hooks_skipped
     unseen = [command for command in offered if command not in (saved or ()) and command not in skipped]
@@ -126,7 +128,7 @@ def hooks_wanted(app: App, flag: bool | None) -> tuple[str, ...]:
 HOOKS_OPTION = click.option(
     "--hooks/--no-hooks",
     default=None,
-    help="Choose again which host hooks go into the VM, or copy none this time, without asking "
+    help="--hooks shows the hook checklist again; --no-hooks copies none this time and saves nothing "
     "(default: ask once and remember).",
 )
 
