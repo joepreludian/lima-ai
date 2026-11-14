@@ -1329,3 +1329,118 @@ def test_new_asks_about_hooks_before_the_clone(env, monkeypatch):
     assert clones_when_asked == [0]
     assert env.runner.find("limactl clone")
     assert len(script_copies(env)) == 1
+
+
+# --- PROJECT WORKSPACE left out: pick the VM from the menu --------------------------
+
+
+def one_running_one_stopped(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Running"), (OTHER, "Stopped")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    write_record(OTHER, "other/thing", "thing", "b")
+
+
+def pick_from_menu(monkeypatch, choice):
+    """Stub the VM menu; returns the list of (rows, kwargs) it was shown with."""
+    seen = []
+    monkeypatch.setattr(menu, "choose_vm", lambda rows, **kwargs: seen.append((rows, kwargs)) or choice)
+    return seen
+
+
+def test_stop_without_arguments_stops_the_vm_picked_in_the_menu(env, monkeypatch):
+    two_running(env)
+    seen = pick_from_menu(monkeypatch, ("other/thing", "b"))
+    result = env.invoke(["stop"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert seen[0][1] == {}
+    assert f"limactl stop {OTHER}" in env.runner.commands
+    assert f"limactl stop {INSTANCE}" not in env.runner.commands
+
+
+def test_stop_without_arguments_shows_the_menu_even_for_a_single_running_vm(env, monkeypatch):
+    one_running_one_stopped(env)
+    seen = pick_from_menu(monkeypatch, ("preludian/myapp", "feat-a"))
+    result = env.invoke(["stop"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert len(seen) == 1
+    assert f"limactl stop {INSTANCE}" in env.runner.commands
+
+
+def test_start_without_arguments_offers_the_stopped_vms(env, monkeypatch):
+    one_running_one_stopped(env)
+    seen = pick_from_menu(monkeypatch, ("other/thing", "b"))
+    result = env.invoke(["start"], interactive=True)
+    assert result.exit_code == 0, result.output
+    assert seen[0][1] == {"running": False}
+    assert f"limactl start --tty=false {OTHER}" in env.runner.commands
+
+
+def test_start_without_arguments_errors_when_every_vm_runs(env, monkeypatch):
+    two_running(env)
+    seen = pick_from_menu(monkeypatch, None)
+    result = env.invoke(["start"], interactive=True)
+    assert result.exit_code == 1
+    assert "error [start]: no stopped workspace VMs" in result.output
+    assert seen == []
+    assert not env.runner.find("limactl start")
+
+
+def test_stop_without_arguments_errors_when_no_vm_runs(env):
+    env.runner.on("limactl list --json", lima_list(("dev-base", "Stopped"), (INSTANCE, "Stopped")))
+    write_record(INSTANCE, "preludian/myapp", "myapp", "feat-a")
+    result = env.invoke(["stop"], interactive=True)
+    assert result.exit_code == 1
+    assert "error [stop]: no running workspace VMs" in result.output
+    assert "preludian/myapp  feat-a  Stopped" in result.output
+
+
+def test_sync_without_arguments_syncs_the_vm_picked_in_the_menu(env, monkeypatch):
+    two_running(env)
+    (env.cfg.developer_dir / "other/thing").mkdir(parents=True)
+    pick_from_menu(monkeypatch, ("other/thing", "b"))
+    result = env.invoke(["sync"], interactive=True)
+    assert result.exit_code == 0, result.output
+    [copy] = env.runner.find("--exclude-from=")
+    assert f"lima-{OTHER}:" in copy.command
+
+
+def test_sync_claude_without_arguments_pushes_to_the_vm_picked_in_the_menu(env, monkeypatch):
+    two_running(env)
+    env.write_token()
+    pick_from_menu(monkeypatch, ("other/thing", "b"))
+    result = env.invoke(["sync-claude", "--no-aws"], interactive=True)
+    assert result.exit_code == 0, result.output
+    [copy] = env.runner.find("--copy-unsafe-links")
+    assert f"lima-{OTHER}:" in copy.command
+
+
+def test_cancelling_the_menu_aborts_the_command(env, monkeypatch):
+    two_running(env)
+    pick_from_menu(monkeypatch, None)
+    result = env.invoke(["stop"], interactive=True)
+    assert result.exit_code == 1
+    assert not env.runner.find("limactl stop")
+
+
+def test_outside_a_terminal_the_only_candidate_is_used(env):
+    one_running_one_stopped(env)
+    result = env.invoke(["stop"], interactive=False)
+    assert result.exit_code == 0, result.output
+    assert "preludian/myapp feat-a" in result.output
+    assert f"limactl stop {INSTANCE}" in env.runner.commands
+
+
+def test_outside_a_terminal_several_candidates_are_listed(env):
+    two_running(env)
+    result = env.invoke(["stop"], interactive=False)
+    assert result.exit_code == 1
+    assert "error [stop]: several workspace VMs are running:" in result.output
+    assert "name one: lima-ai stop PROJECT WORKSPACE" in result.output
+    assert not env.runner.find("limactl stop")
+
+
+@pytest.mark.parametrize("command", ["sync", "sync-claude", "start", "stop"])
+def test_one_argument_is_a_usage_error(env, command):
+    result = env.invoke([command, "preludian/myapp"])
+    assert result.exit_code == 2
+    assert "both PROJECT and WORKSPACE" in result.output

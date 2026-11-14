@@ -137,3 +137,18 @@ def test_hook_checklist_space_ticks_the_first_and_keeps_saved_ticks():
 
 def test_hook_checklist_ctrl_c_cancels():
     assert run_hooks(CTRL_C) is None
+
+
+# --- picking a stopped VM (lima-ai start) --------------------------------------------
+
+
+def test_choices_for_stopped_vms_put_them_first_and_disable_the_running_ones():
+    picks = menu.choices(ROWS, running=False)
+    assert picks[0].title == "acme/shop        redesign"
+    assert [c.disabled for c in picks] == [None, "Running", "Running", "Running"]
+
+
+def test_enter_picks_the_first_stopped_vm():
+    with create_pipe_input() as pipe:
+        pipe.send_text(ENTER)
+        assert menu.choose_vm(ROWS, running=False, input=pipe, output=DummyOutput()) == ("acme/shop", "redesign")

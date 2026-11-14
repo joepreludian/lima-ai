@@ -355,24 +355,36 @@ def open_shell(ws: Workspace) -> int:
     return result.returncode
 
 
-def pick_vm(runner: Runner, interactive: bool) -> tuple[str, str]:
-    """(project, workspace) to open when `shell` gets no arguments: the only running VM, or the user's pick."""
+def pick_vm(runner: Runner, interactive: bool, command: str = "shell", running: bool = True) -> tuple[str, str]:
+    """(project, workspace) for a command given no arguments, picked among the running VMs
+    (or, with running=False, the ones that are not).
+
+    `shell` opens the only candidate without asking. The other commands show the menu whenever there
+    is a terminal; without one they take the only candidate and say which, or fail listing them.
+    """
     lima = Limactl(runner)
     rows = [menu.VmRow(info["project"], info["workspace"], vm.status) for vm, info in workspace_vms(lima) if info]
-    running = [row for row in rows if row.running]
-    if not running:
-        stopped = [[row.project, row.workspace, row.status] for row in rows]
-        raise LimaAiError(
-            "shell",
-            "no running workspace VMs; start one with `lima-ai start PROJECT WORKSPACE`",
-            stderr_tail="\n".join(table_lines(stopped)) if stopped else "",
+    candidates = [row for row in rows if row.running == running]
+    if not candidates:
+        others = [[row.project, row.workspace, row.status] for row in rows]
+        message = (
+            "no running workspace VMs; start one with `lima-ai start PROJECT WORKSPACE`"
+            if running
+            else "no stopped workspace VMs; nothing to start"
         )
-    if len(running) == 1:
-        return running[0].project, running[0].workspace
+        raise LimaAiError(command, message, stderr_tail="\n".join(table_lines(others)) if others else "")
+    only = candidates[0] if len(candidates) == 1 else None
+    if only and command == "shell":
+        return only.project, only.workspace
     if not interactive:
-        tail = [*list_lines(lima), "open one with: lima-ai shell PROJECT WORKSPACE"]
-        raise LimaAiError("shell", "several workspace VMs are running:", stderr_tail="\n".join(tail))
-    choice = menu.choose_vm(rows)
+        if only:
+            note(f"{command}: {only.project} {only.workspace}")
+            return only.project, only.workspace
+        hint = "open one with: lima-ai shell" if command == "shell" else f"name one: lima-ai {command}"
+        tail = [*list_lines(lima), f"{hint} PROJECT WORKSPACE"]
+        state = "running" if running else "stopped"
+        raise LimaAiError(command, f"several workspace VMs are {state}:", stderr_tail="\n".join(tail))
+    choice = menu.choose_vm(rows) if running else menu.choose_vm(rows, running=False)
     if choice is None:
         raise click.Abort()
     return choice

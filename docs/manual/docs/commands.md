@@ -10,10 +10,15 @@
 | `new [<project>] [<workspace>] [--branch NAME \| --no-branch] [--cpus N] [--memory 16GiB] [--disk 100GiB] [--aws \| --no-aws] [--hooks \| --no-hooks]` | Create a workspace VM; asks for the project (fzf when installed), the workspace and the branch when they are not given, whether to copy `~/.aws`, and (once) which host hooks to copy |
 | `shell [<project> <workspace>]` | Open a shell in the VM's working copy, with your SSH agent forwarded; with no arguments, picks the VM for you |
 | `list` (alias `ls`) | List workspace VMs with project, workspace, status, branch and FQDN |
-| `sync <project> <workspace>` | Copy the host project into the VM again |
-| `sync-claude <project> <workspace> [--aws \| --no-aws] [--hooks \| --no-hooks]` | Copy the Claude token, Claude config, the host hooks you chose, git config, (if enabled) SSH keys and (if confirmed) AWS config again; `--hooks` shows the hook checklist again, `--no-hooks` copies none this time |
-| `start <project> <workspace>` / `stop <project> <workspace>` | Start or stop a workspace VM |
+| `sync [<project> <workspace>]` | Copy the host project into the VM again |
+| `sync-claude [<project> <workspace>] [--aws \| --no-aws] [--hooks \| --no-hooks]` | Copy the Claude token, Claude config, the host hooks you chose, git config, (if enabled) SSH keys and (if confirmed) AWS config again; `--hooks` shows the hook checklist again, `--no-hooks` copies none this time |
+| `start [<project> <workspace>]` / `stop [<project> <workspace>]` | Start or stop a workspace VM |
 | `destroy [<project> <workspace>] [--yes] [--force]` | Delete workspace VMs after checking for unsaved work; with no arguments, pick them from a checklist |
+
+`sync`, `sync-claude`, `start` and `stop` pick the VM from a menu when you
+give neither `<project>` nor `<workspace>`: the running VMs, or for `start`
+the stopped ones. Outside a terminal they use the only candidate and say
+which, or list them and stop when there are several.
 
 Add `-v` before a command (`lima-ai -v new …`) to print every command
 lima-ai runs.

@@ -1,3 +1,4 @@
+import functools
 import shutil
 import sys
 from pathlib import Path
@@ -200,13 +201,35 @@ def auth_command(app: App, from_stdin: bool) -> None:
     click.echo(f"Token saved to {auth.token_path()}")
 
 
-def workspace_command(name: str | None = None, **settings):
-    """A command taking PROJECT WORKSPACE, the way most lima-ai commands do."""
+def resolve_vm(app: App, command: str, project: str | None, workspace: str | None, running: bool = True):
+    """PROJECT WORKSPACE as given, or with neither the VM picked among the running (or not running) ones."""
+    if (project is None) != (workspace is None):
+        state = "running" if running else "stopped"
+        raise click.UsageError(f"give both PROJECT and WORKSPACE, or neither to pick from the {state} VMs")
+    if project is None or workspace is None:
+        app.require("limactl")
+        return instance.pick_vm(app.runner, app.interactive, command, running)
+    return project, workspace
+
+
+def workspace_command(name: str | None = None, running: bool = True, **settings):
+    """A command taking PROJECT WORKSPACE, the way most lima-ai commands do.
+
+    With neither argument the VM is picked from a menu of the running ones (running=False: the stopped ones).
+    """
 
     def decorate(func):
-        func = click.argument("workspace")(func)
-        func = click.argument("project")(func)
-        return cli.command(name, **settings)(func)
+        command = name or func.__name__
+
+        @functools.wraps(func)
+        def wrapper(*args, project: str | None, workspace: str | None, **kwargs):
+            app = click.get_current_context().find_object(App)
+            project, workspace = resolve_vm(app, command, project, workspace, running)
+            return func(*args, project=project, workspace=workspace, **kwargs)
+
+        wrapper = click.argument("workspace", required=False)(wrapper)
+        wrapper = click.argument("project", required=False)(wrapper)
+        return cli.command(name, **settings)(wrapper)
 
     return decorate
 
@@ -247,7 +270,7 @@ def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk, aws
 @workspace_command()
 @pass_app
 def sync(app: App, project: str, workspace: str) -> None:
-    """Copy the host project into the VM again (no deletions)."""
+    """Copy the host project into the VM again (no deletions); with no arguments, pick the VM from a menu."""
     app.require("rsync")
     instance.sync(app.workspace(project, workspace))
 
@@ -257,7 +280,9 @@ def sync(app: App, project: str, workspace: str) -> None:
 @HOOKS_OPTION
 @pass_app
 def sync_claude(app: App, project: str, workspace: str, aws: bool | None, hooks: bool | None) -> None:
-    """Push the Claude token, Claude config, git config and (if confirmed) AWS config into the VM again."""
+    """Push the Claude token, Claude config, git config and (if confirmed) AWS config into the VM again.
+
+    With no arguments, pick the VM from a menu."""
     app.require("rsync")
     aws = aws_wanted(app, aws)
     instance.sync_claude(app.workspace(project, workspace), aws=aws, hooks=hooks_wanted(app, hooks))
@@ -269,25 +294,21 @@ def sync_claude(app: App, project: str, workspace: str, aws: bool | None, hooks:
 @pass_app
 def shell(app: App, project: str | None, workspace: str | None) -> None:
     """Open a shell in a VM's working copy (SSH agent forwarded); with no arguments, the only running VM or a menu."""
-    if (project is None) != (workspace is None):
-        raise click.UsageError("give both PROJECT and WORKSPACE, or neither to pick from the running VMs")
-    if project is None or workspace is None:
-        app.require("limactl")
-        project, workspace = instance.pick_vm(app.runner, app.interactive)
+    project, workspace = resolve_vm(app, "shell", project, workspace)
     instance.open_shell(app.workspace(project, workspace))
 
 
-@workspace_command()
+@workspace_command(running=False)
 @pass_app
 def start(app: App, project: str, workspace: str) -> None:
-    """Start a stopped workspace VM."""
+    """Start a stopped workspace VM; with no arguments, pick it from a menu."""
     instance.start(app.workspace(project, workspace))
 
 
 @workspace_command()
 @pass_app
 def stop(app: App, project: str, workspace: str) -> None:
-    """Stop a workspace VM."""
+    """Stop a workspace VM; with no arguments, pick it from a menu."""
     instance.stop(app.workspace(project, workspace))
 
 

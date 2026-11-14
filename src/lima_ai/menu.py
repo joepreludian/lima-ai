@@ -20,22 +20,25 @@ class VmRow:
         return self.status == "Running"
 
 
-def ordered(rows: list[VmRow]) -> list[VmRow]:
-    """Running VMs first, each group by project then workspace."""
-    return sorted(rows, key=lambda row: (not row.running, row.project, row.workspace))
+def ordered(rows: list[VmRow], running: bool = True) -> list[VmRow]:
+    """Running VMs first (or last, with running=False), each group by project then workspace."""
+    return sorted(rows, key=lambda row: (row.running != running, row.project, row.workspace))
 
 
-def choices(rows: list[VmRow]):
-    """questionary choices: running VMs first, aligned columns, stopped ones disabled with their status."""
+def choices(rows: list[VmRow], running: bool = True):
+    """questionary choices: the pickable VMs first, aligned columns, the others disabled with their status.
+
+    Pickable means running, or with running=False (for `lima-ai start`) not running.
+    """
     from questionary import Choice
 
-    rows = ordered(rows)
+    rows = ordered(rows, running)
     width = max(len(row.project) for row in rows)
     return [
         Choice(
             f"{row.project.ljust(width)}  {row.workspace}",
             value=(row.project, row.workspace),
-            disabled=None if row.running else row.status,
+            disabled=None if row.running == running else row.status,
         )
         for row in rows
     ]
@@ -57,13 +60,13 @@ def destroy_choices(rows: list[VmRow]):
     ]
 
 
-def choose_vm(rows: list[VmRow], **prompt_kwargs) -> tuple[str, str] | None:
-    """Ask which VM to open; None when the user cancels. prompt_kwargs reach questionary.select (tests)."""
+def choose_vm(rows: list[VmRow], running: bool = True, **prompt_kwargs) -> tuple[str, str] | None:
+    """Ask which VM to act on; None when the user cancels. prompt_kwargs reach questionary.select (tests)."""
     import questionary
 
     click.secho("Lima-ai", bold=True)
     try:
-        return questionary.select("Select your VM", choices(rows), pointer=">", **prompt_kwargs).unsafe_ask()
+        return questionary.select("Select your VM", choices(rows, running), pointer=">", **prompt_kwargs).unsafe_ask()
     except KeyboardInterrupt:
         return None
 
