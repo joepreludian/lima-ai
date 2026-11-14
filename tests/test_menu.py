@@ -2,6 +2,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
 
 from lima_ai import menu
+from lima_ai.claude_config import HookChoice
 from lima_ai.menu import VmRow
 
 DOWN = "\x1b[B"
@@ -101,3 +102,38 @@ def test_checklist_a_ticks_every_vm():
 def test_checklist_ctrl_c_cancels(capsys):
     assert run_checklist(CTRL_C) is None
     assert "Lima-ai" in capsys.readouterr().out
+
+
+# --- the hook checklist --------------------------------------------------------------
+
+HOOKS = [
+    HookChoice(
+        "/Users/jon/.claude-display/push-event.sh", ("SessionStart", "Stop"), (".claude-display/push-event.sh",)
+    ),
+    HookChoice("~/bin/n.sh --go", ("PreToolUse (Bash)",), ("bin/n.sh",)),
+]
+
+
+def run_hooks(keys: str, ticked=()):
+    with create_pipe_input() as pipe:
+        pipe.send_text(keys)
+        return menu.choose_hooks(HOOKS, ticked, "/Users/jon", input=pipe, output=DummyOutput())
+
+
+def test_hook_choices_show_the_command_with_a_tilde_then_its_events():
+    first, second = menu.hook_choices(HOOKS, {"~/bin/n.sh --go"}, "/Users/jon")
+    assert first.title == "~/.claude-display/push-event.sh  SessionStart, Stop"
+    assert second.title == "~/bin/n.sh --go                  PreToolUse (Bash)"
+    assert (first.value, first.checked, second.checked) == (HOOKS[0].command, False, True)
+
+
+def test_hook_checklist_enter_with_nothing_ticked_returns_empty():
+    assert run_hooks(ENTER) == []
+
+
+def test_hook_checklist_space_ticks_the_first_and_keeps_saved_ticks():
+    assert run_hooks(SPACE + ENTER, ticked={"~/bin/n.sh --go"}) == [HOOKS[0].command, "~/bin/n.sh --go"]
+
+
+def test_hook_checklist_ctrl_c_cancels():
+    assert run_hooks(CTRL_C) is None
