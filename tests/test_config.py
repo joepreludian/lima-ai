@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from lima_ai.config import Config, config_dir, load_config, save_setting, save_ssh_keys, state_dir
+from lima_ai.config import Config, config_dir, load_config, save_hooks, save_setting, save_ssh_keys, state_dir
 from lima_ai.errors import LimaAiError
 
 
@@ -213,3 +213,46 @@ def test_save_setting_fills_an_empty_table_with_commented_keys(tmp_path):
 def test_relative_base_hook_is_resolved_against_the_config_file(tmp_path):
     cfg = load_config(write(tmp_path, '[base]\nhook = "hooks/custom.sh"\n'))
     assert cfg.base.hook == tmp_path / "hooks/custom.sh"
+
+
+# --- hooks -------------------------------------------------------------------------
+
+
+def test_sync_hooks_default_to_never_asked():
+    assert Config().sync.hooks is None
+    assert Config().sync.hooks_skipped == ()
+
+
+def test_sync_hooks_are_read(tmp_path):
+    cfg = load_config(write(tmp_path, '[sync]\nhooks = ["~/a.sh --x"]\nhooks_skipped = []\n'))
+    assert cfg.sync.hooks == ("~/a.sh --x",)
+    assert cfg.sync.hooks_skipped == ()
+
+
+def test_sync_hooks_must_be_a_list_of_strings(tmp_path):
+    with pytest.raises(LimaAiError, match=r"'sync\.hooks' .* must be a list of strings"):
+        load_config(write(tmp_path, "[sync]\nhooks = true\n"))
+
+
+def test_save_hooks_writes_both_lists_and_keeps_the_rest(tmp_path):
+    path = write(tmp_path, "[sync]\nssh_keys = true\n")
+    save_hooks(["/Users/jon/.x/a.sh", '"$HOME/bin/n" go'], [], path)
+    cfg = load_config(path)
+    assert cfg.sync.hooks == ("/Users/jon/.x/a.sh", '"$HOME/bin/n" go')
+    assert cfg.sync.hooks_skipped == ()
+    assert cfg.sync.ssh_keys is True
+
+
+def test_save_hooks_replaces_earlier_lists(tmp_path):
+    path = write(tmp_path, '[sync]\nhooks = ["a"]\nhooks_skipped = ["b"]\n')
+    save_hooks([], ["a", "b"], path)
+    cfg = load_config(path)
+    assert (cfg.sync.hooks, cfg.sync.hooks_skipped) == ((), ("a", "b"))
+
+
+def test_save_hooks_refuses_a_multi_line_array(tmp_path):
+    original = '[sync]\nhooks = [\n  "a",\n]\n'
+    path = write(tmp_path, original)
+    with pytest.raises(LimaAiError, match="fix the file first"):
+        save_hooks(["b"], [], path)
+    assert path.read_text() == original

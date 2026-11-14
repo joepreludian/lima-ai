@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from lima_ai.config import load_config, save_setting
+from lima_ai.config import Config, load_config, save_setting
 from lima_ai.config_file import edit, effective_toml, template_toml
 from lima_ai.errors import LimaAiError
 
@@ -95,3 +95,9 @@ def test_effective_toml_shows_the_hook_with_a_tilde(tmp_path):
     path.write_text('[base]\nhook = "~/lima/custom.sh"\n')
     text = effective_toml(load_config(path), path)
     assert 'hook = "~/lima/custom.sh"' in text
+
+
+def test_hooks_show_as_unset_and_in_the_template(tmp_path):
+    text = effective_toml(Config(), tmp_path / "config.toml")
+    assert "# hooks is unset" in text and "hooks_skipped = []" in text
+    assert '# hooks = ["~/.claude/hooks/check.sh"]' in template_toml()

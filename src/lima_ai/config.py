@@ -5,6 +5,7 @@ import re
 import tomllib
 import types
 import typing
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,11 @@ class SyncConfig:
     extra_excludes: tuple[str, ...] = ()
     # None: ask before copying ~/.ssh private keys into a VM, then remember the answer here.
     ssh_keys: bool | None = None
+    # Host Claude Code hook commands (as written in ~/.claude/settings.json) whose scripts are copied
+    # into VMs. None: ask which ones, then remember the answer here and in hooks_skipped.
+    hooks: tuple[str, ...] | None = None
+    # Hook commands that were offered and declined, so they do not bring the question back.
+    hooks_skipped: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -122,7 +128,8 @@ def _build(cls, values: dict[str, Any], prefix: str, path: Path, sections: set[s
 def _expected_type(annotation: Any, default: Any) -> type:
     """The type a setting must have: its default's, or for `X | None` fields the X."""
     if isinstance(annotation, types.UnionType):
-        return next(arg for arg in typing.get_args(annotation) if arg is not type(None))
+        inner = next(arg for arg in typing.get_args(annotation) if arg is not type(None))
+        return typing.get_origin(inner) or inner  # tuple[str, ...] | None → tuple
     if isinstance(annotation, type):
         return annotation
     return type(default)  # a generic alias such as tuple[str, ...]
@@ -157,13 +164,21 @@ def _type_name(expected: type) -> str:
 _ANY_HEADER = re.compile(r"^\s*\[", re.MULTILINE)
 
 
-def save_setting(section: str, key: str, value: bool | str, path: Path | None = None) -> Path:
-    """Write `key = value` under [section] in config.toml, keeping everything else as written."""
+def save_setting(section: str, key: str, value: bool | str | Sequence[str], path: Path | None = None) -> Path:
+    """Write `key = value` under [section] in config.toml, keeping everything else as written.
+
+    A list or tuple of strings is written as a one-line array.
+    """
     path = path or config_dir() / "config.toml"
     text = path.read_text() if path.exists() else ""
     if text and not text.endswith("\n"):
         text += "\n"
-    rendered = str(value).lower() if isinstance(value, bool) else json.dumps(value)
+    if isinstance(value, bool):
+        rendered = str(value).lower()
+    elif isinstance(value, str):
+        rendered = json.dumps(value)
+    else:
+        rendered = "[" + ", ".join(json.dumps(item) for item in value) + "]"
     line = f"{key} = {rendered}\n"
     header = re.search(rf"^\s*\[\s*{re.escape(section)}\s*\]", text, re.MULTILINE)
     if header is None:
@@ -188,3 +203,9 @@ def save_setting(section: str, key: str, value: bool | str, path: Path | None = 
 def save_ssh_keys(value: bool, path: Path | None = None) -> Path:
     """Write `ssh_keys = true|false` under [sync] in config.toml."""
     return save_setting("sync", "ssh_keys", value, path)
+
+
+def save_hooks(hooks: Sequence[str], skipped: Sequence[str], path: Path | None = None) -> Path:
+    """Write the chosen and the declined hook commands under [sync] in config.toml."""
+    save_setting("sync", "hooks", hooks, path)
+    return save_setting("sync", "hooks_skipped", skipped, path)

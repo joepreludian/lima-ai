@@ -30,15 +30,18 @@ SETTINGS: tuple[tuple[str | None, str, str], ...] = (
     ("versions", "ssm_plugin_sha256", ""),
     ("sync", "extra_excludes", "added to the project rsync excludes"),
     ("sync", "ssh_keys", "copy ~/.ssh private keys into VMs; unset = ask once and save the answer"),
+    ("sync", "hooks", "host hook commands copied into VMs; unset = ask once and save the answer"),
+    ("sync", "hooks_skipped", "host hook commands seen and declined"),
     ("base", "hook", "a script lima-ai base runs as root in dev-base after its own provisioning"),
 )
 
 # What an unset optional key means, for `lima-ai config`, and an example value for the template.
 UNSET_NOTE = {
     "ssh_keys": "asked once and saved",
+    "hooks": "asked once and saved",
     "hook": "lima-ai base --use-hook PATH sets it",
 }
-EXAMPLE = {"ssh_keys": False, "hook": "~/lima/custom.sh"}
+EXAMPLE = {"ssh_keys": False, "hooks": ("~/.claude/hooks/check.sh",), "hook": "~/lima/custom.sh"}
 
 
 def _toml_value(value) -> str:
