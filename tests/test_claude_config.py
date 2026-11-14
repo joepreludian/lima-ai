@@ -292,3 +292,20 @@ def test_push_without_kept_hooks_runs_no_extra_rsync(tmp_path, capsys):
     runner = push(tmp_path, [])
     assert not runner.find("--relative")
     assert "hooks kept" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "hooks",
+    [
+        "nope",
+        {"Stop": "nope"},
+        {"Stop": None},
+        {"Stop": ["nope"]},
+        {"Stop": [{"matcher": "x"}]},
+        {"Stop": [{"hooks": None}]},
+        {"Stop": [{"hooks": [{"type": "prompt", "prompt": "hi"}, "nope", {"command": 3}, {"command": ["a"]}]}]},
+    ],
+)
+def test_filter_hooks_leaves_shapes_it_does_not_know_alone(tmp_path, hooks):
+    home, dev = hook_home(tmp_path)
+    assert filter_hooks({"hooks": hooks}, home, dev, keep={"x"}) == {"hooks": hooks}

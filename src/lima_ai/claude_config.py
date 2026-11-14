@@ -114,14 +114,22 @@ def filter_hooks(settings: dict, host_home: str, developer_dir: str, keep: Colle
         return result
     developer_rel = _home_relative(developer_dir, host_home)
 
-    def stays(hook: dict) -> bool:
-        command = hook.get("command", "")
+    def stays(hook) -> bool:
+        command = hook.get("command") if isinstance(hook, dict) else None
+        if not isinstance(command, str):
+            return True  # not a command hook: nothing to judge
         return command in keep or not _missing_in_guest(command, host_home, developer_rel)
 
+    # Anything not shaped like {event: [{hooks: [...]}]} is left as written.
     for event in list(hooks):
+        if not isinstance(hooks[event], list):
+            continue
         groups = []
         for group in hooks[event]:
-            kept = [hook for hook in group.get("hooks", []) if stays(hook)]
+            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+                groups.append(group)
+                continue
+            kept = [hook for hook in group["hooks"] if stays(hook)]
             if kept:
                 groups.append({**group, "hooks": kept})
         if groups:

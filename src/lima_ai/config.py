@@ -178,7 +178,8 @@ def save_setting(section: str, key: str, value: bool | str | Sequence[str], path
     elif isinstance(value, str):
         rendered = json.dumps(value)
     else:
-        rendered = "[" + ", ".join(json.dumps(item) for item in value) + "]"
+        # Not ASCII-escaped: JSON writes an emoji as a surrogate pair, which TOML rejects.
+        rendered = "[" + ", ".join(json.dumps(item, ensure_ascii=False) for item in value) + "]"
     line = f"{key} = {rendered}\n"
     header = re.search(rf"^\s*\[\s*{re.escape(section)}\s*\]", text, re.MULTILINE)
     if header is None:

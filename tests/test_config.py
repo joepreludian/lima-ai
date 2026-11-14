@@ -256,3 +256,10 @@ def test_save_hooks_refuses_a_multi_line_array(tmp_path):
     with pytest.raises(LimaAiError, match="fix the file first"):
         save_hooks(["b"], [], path)
     assert path.read_text() == original
+
+
+def test_save_hooks_keeps_characters_outside_ascii(tmp_path):
+    path = tmp_path / "config.toml"
+    command = '~/.x/n.sh "done 🎉 olá"'
+    save_hooks([command], [], path)
+    assert load_config(path).sync.hooks == (command,)
