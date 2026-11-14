@@ -7,11 +7,16 @@ import pytest
 
 from lima_ai.claude_config import (
     INCLUDE,
+    HookChoice,
     filter_hooks,
     filter_options,
+    offered_hooks,
+    push_claude_config,
     rewrite_home,
     stage_transformed,
 )
+from lima_ai.limactl import Instance
+from tests.fakes import FakeRunner
 
 FIXTURES = Path(__file__).parent / "fixtures"
 HOST_HOME = "/Users/jon"
@@ -173,3 +178,117 @@ def test_include_list_matches_spec():
         "commands",
         "agents",
     )
+
+
+# --- choosing hooks ----------------------------------------------------------------
+
+
+def hook_home(tmp_path: Path) -> tuple[str, str]:
+    """A host home with hook scripts on disk; returns (home, developer_dir)."""
+    home = tmp_path / "home"
+    for rel in [".claude-display/push-event.sh", ".claude/hooks/block.sh", "Developer/tools/format.sh"]:
+        (home / rel).parent.mkdir(parents=True, exist_ok=True)
+        (home / rel).write_text("#!/bin/sh\n")
+    (home / ".claude-display/assets").mkdir()
+    return str(home), str(home / "Developer")
+
+
+def hook_settings(home: str) -> dict:
+    def entry(command, matcher=None):
+        group = {"hooks": [{"type": "command", "command": command}]}
+        return {**group, "matcher": matcher} if matcher else group
+
+    push = f"{home}/.claude-display/push-event.sh"
+    return {
+        "hooks": {
+            "SessionStart": [entry(push)],
+            "PreToolUse": [
+                entry(push, "*"),
+                entry(f"{home}/.claude/hooks/block.sh", "Bash"),
+                entry("rtk hook claude", "Bash"),
+            ],
+            "Stop": [entry(push), entry("~/.claude-display/push-event.sh")],
+            "PostToolUse": [entry(f"{home}/Developer/tools/format.sh", "Edit")],
+            "Notification": [entry(f"{home}/.claude-display/assets"), entry(f"{home}/bin/gone.sh")],
+            "UserPromptSubmit": [entry(f"{home}/My Scripts/a.sh")],
+        }
+    }
+
+
+def test_offered_hooks_are_the_dropped_ones_whose_script_is_a_file(tmp_path):
+    home, dev = hook_home(tmp_path)
+    # Not offered: rtk (no path), format.sh (mounted), a directory, a missing file, a path with a space.
+    assert offered_hooks(hook_settings(home), home, dev) == [
+        HookChoice(
+            f"{home}/.claude-display/push-event.sh",
+            ("SessionStart", "PreToolUse", "Stop"),
+            (".claude-display/push-event.sh",),
+        ),
+        HookChoice(f"{home}/.claude/hooks/block.sh", ("PreToolUse (Bash)",), (".claude/hooks/block.sh",)),
+        HookChoice("~/.claude-display/push-event.sh", ("Stop",), (".claude-display/push-event.sh",)),
+    ]
+
+
+@pytest.mark.parametrize(
+    "hooks",
+    [
+        "nope",
+        {"Stop": "nope"},
+        {"Stop": ["nope"]},
+        {"Stop": [{"matcher": "x"}]},
+        {"Stop": [{"hooks": [{"type": "prompt", "prompt": "hi"}, "nope", {"command": 3}]}]},
+    ],
+)
+def test_offered_hooks_skip_shapes_they_do_not_know(tmp_path, hooks):
+    home, dev = hook_home(tmp_path)
+    assert offered_hooks({"hooks": hooks}, home, dev) == []
+
+
+def test_filter_hooks_keeps_the_named_commands(tmp_path):
+    home, dev = hook_home(tmp_path)
+    block = f"{home}/.claude/hooks/block.sh"
+    result = filter_hooks(hook_settings(home), home, dev, keep={block})
+    assert commands(result) == {
+        "PreToolUse": [block, "rtk hook claude"],
+        "PostToolUse": [f"{home}/Developer/tools/format.sh"],
+    }
+
+
+def test_stage_transformed_rewrites_a_kept_hook_to_the_guest_home(tmp_path):
+    home, dev = hook_home(tmp_path)
+    claude = Path(home) / ".claude"
+    (claude / "settings.json").write_text(json.dumps(hook_settings(home)))
+    stage_transformed(claude, tmp_path / "staging", home, GUEST_HOME, dev, keep={f"{home}/.claude/hooks/block.sh"})
+    staged = json.loads((tmp_path / "staging/settings.json").read_text())
+    assert commands(staged)["PreToolUse"] == ["/home/jon.linux/.claude/hooks/block.sh", "rtk hook claude"]
+
+
+def push(tmp_path: Path, keep: list[str]) -> FakeRunner:
+    home, dev = hook_home(tmp_path)
+    (Path(home) / ".claude/settings.json").write_text(json.dumps(hook_settings(home)))
+    runner = FakeRunner()
+    instance = Instance(name="x", status="Running", dir=tmp_path / "x", ssh_config=tmp_path / "x/ssh.config")
+    push_claude_config(runner, instance, GUEST_HOME, Path(dev), Path(home), keep_hooks=keep)
+    return runner
+
+
+def test_push_copies_each_kept_script_once_from_the_host_home(tmp_path, capsys):
+    home = tmp_path / "home"
+    runner = push(tmp_path, [f"{home}/.claude-display/push-event.sh", "~/.claude-display/push-event.sh"])
+    [call] = runner.find("--relative")
+    assert call.cwd == home
+    assert call.argv[-2:] == [".claude-display/push-event.sh", "lima-x:"]
+    assert "--copy-links" in call.argv
+    assert runner.calls.index(call) < len(runner.calls) - 1  # before the staged settings.json goes over
+    assert "hooks kept: ~/.claude-display/push-event.sh, ~/.claude-display/push-event.sh" in capsys.readouterr().err
+
+
+def test_push_ignores_a_kept_command_that_is_no_longer_offered(tmp_path):
+    runner = push(tmp_path, [f"{tmp_path}/home/bin/gone.sh"])
+    assert not runner.find("--relative")
+
+
+def test_push_without_kept_hooks_runs_no_extra_rsync(tmp_path, capsys):
+    runner = push(tmp_path, [])
+    assert not runner.find("--relative")
+    assert "hooks kept" not in capsys.readouterr().err
