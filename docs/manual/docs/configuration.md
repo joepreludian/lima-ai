@@ -28,6 +28,8 @@ ssm_plugin_sha256 = "914eeca87b18b55356c58be197080f73742b3ca60d3823f0a45670dc905
 [sync]
 extra_excludes = ["*.sqlite3"]                # added to the project rsync excludes
 ssh_keys = false                              # copy ~/.ssh private keys into VMs; unset = ask once and save the answer
+hooks = ["~/.claude/hooks/check.sh"]          # host hook commands copied into VMs; unset = ask once and save the answer
+hooks_skipped = []                            # host hook commands seen and declined
 
 [base]
 hook = "~/lima/custom.sh"                     # a script lima-ai base runs as root in dev-base after its own provisioning
@@ -38,6 +40,11 @@ After changing `developer_dir`, `backups_dir`, `[vm]` or `[versions]`, run
 `lima-ai base --rebuild`; VMs you already created keep their old settings.
 The `hook` under `[base]` is your own additions to the image; `lima-ai base
 --use-hook PATH` sets it. [The base image](base-image.md) explains how it runs.
+
+`hooks` and `hooks_skipped` are written by the hook checklist that `new` and
+`sync-claude` show; each entry is a hook command exactly as it appears in
+`~/.claude/settings.json`. [Everyday tasks](everyday.md) explains what is
+offered and what is copied.
 
 `lima-ai config` prints the settings in effect, defaults included, headed by
 a comment naming the file. `lima-ai config --edit` opens that file in

@@ -40,7 +40,7 @@ variant, and how to move data to and from the Mac's Docker.
 - **Claude config**, from `~/.claude`: `CLAUDE.md`, `RTK.md`,
   `settings.json`, `statusline-command.sh`, `skills/`, `plugins/`,
   `commands/` and `agents/`. Hooks that run files the VM won't have are
-  removed. Paths under your home folder are rewritten to the VM's home;
+  removed, unless you choose to keep them (see **Host hooks** below). Paths under your home folder are rewritten to the VM's home;
   paths under `~/Developer` are left as they are, since the VM mounts them
   at the same place. History, sessions, caches, credentials and
   `~/.claude.json` stay on your Mac. Sessions created in the VM survive a
@@ -50,6 +50,23 @@ variant, and how to move data to and from the Mac's Docker.
   you in without the first-run wizard, and runs `rtk init -g --auto-patch`,
   which adds the rtk hook to `settings.json`, writes `RTK.md` and
   references it from `CLAUDE.md`.
+- **Host hooks**, the ones you tick. A hook in `settings.json` is removed
+  when its command runs a file under your home folder that the VM does not
+  receive, such as a script in `~/.claude/hooks/`. The first time `new` or
+  `sync-claude` finds such hooks, it shows them in a checklist, one row per
+  command with the events it runs on; a hook is listed only when what it
+  runs is a file on your Mac. Ticked hooks stay in the VM's
+  `settings.json`, and their script files are copied to the same place
+  under the VM's home. The answer is saved as `hooks` (ticked) and
+  `hooks_skipped` (declined) under `[sync]` in `config.toml` and reused for
+  every VM; you are asked again only when a hook appears that is in neither
+  list. `--hooks` shows the checklist again, `--no-hooks` copies none for
+  that run and saves nothing, and outside a terminal nothing is asked and
+  the saved list applies. Only the script file itself is copied: a script
+  that needs files next to it, other programs, or something running on
+  your Mac will fail in the VM, so leave it unticked. Unticking a hook
+  later takes it out of the VM's `settings.json` on the next `sync-claude`;
+  the script file stays in the VM, unused.
 - **Git config**: `~/.gitconfig` without the Mac-only parts: difftool and
   mergetool entries, the `osxkeychain` credential helper, and signing
   programs installed only on the Mac. When a signing program is removed,
