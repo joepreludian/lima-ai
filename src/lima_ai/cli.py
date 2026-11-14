@@ -4,9 +4,10 @@ from pathlib import Path
 
 import click
 
-from lima_ai import __version__, auth, base, config_file, doctor, hook, instance, wizard
+from lima_ai import __version__, auth, base, config_file, doctor, hook, instance, menu, wizard
 from lima_ai.aws_config import find_aws_files
-from lima_ai.config import Config, config_dir, load_config, save_setting
+from lima_ai.claude_config import offered_hooks, read_settings
+from lima_ai.config import Config, config_dir, load_config, save_hooks, save_setting
 from lima_ai.errors import LimaAiError
 from lima_ai.render import render_template
 from lima_ai.runner import Runner
@@ -88,6 +89,44 @@ def aws_wanted(app: App, flag: bool | None) -> bool:
 
 AWS_OPTION = click.option(
     "--aws/--no-aws", default=None, help="Copy ~/.aws into the VM, or not, without asking (default: ask)."
+)
+
+
+def hooks_wanted(app: App, flag: bool | None) -> tuple[str, ...]:
+    """The host hook commands whose scripts go into the VM.
+
+    --no-hooks: none. Otherwise the answer saved in config.toml, asking first (in a terminal) when
+    there is none yet, when the host has a hook the answer has never seen, or when --hooks says so.
+    """
+    if flag is False:
+        return ()
+    choices = offered_hooks(read_settings(app.home / ".claude"), str(app.home), str(app.config.developer_dir))
+    offered = [choice.command for choice in choices]
+    if not offered:
+        return ()
+    saved, skipped = app.config.sync.hooks, app.config.sync.hooks_skipped
+    unseen = [command for command in offered if command not in (saved or ()) and command not in skipped]
+    if not app.interactive or not (flag is True or saved is None or unseen):
+        return tuple(command for command in offered if command in (saved or ()))
+    ticked = menu.choose_hooks(choices, saved or (), str(app.home))
+    if ticked is None:
+        raise click.Abort()
+    # Commands the host no longer has stay in the file: they may come back.
+    keep = [*ticked, *(command for command in saved or () if command not in offered)]
+    skip = [
+        *(command for command in offered if command not in ticked),
+        *(command for command in skipped if command not in offered),
+    ]
+    path = save_hooks(keep, skip)
+    click.echo(f"Saved hooks under [sync] in {path}; run with --hooks to choose again.", err=True)
+    return tuple(ticked)
+
+
+HOOKS_OPTION = click.option(
+    "--hooks/--no-hooks",
+    default=None,
+    help="Choose again which host hooks go into the VM, or copy none this time, without asking "
+    "(default: ask once and remember).",
 )
 
 
@@ -181,13 +220,15 @@ def workspace_command(name: str | None = None, **settings):
 @click.option("--memory", help="Memory in GiB, e.g. 16GiB (default: dev-base's).")
 @click.option("--disk", help="Disk size in GiB, e.g. 100GiB (default: dev-base's).")
 @AWS_OPTION
+@HOOKS_OPTION
 @pass_app
-def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk, aws) -> None:
+def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk, aws, hooks) -> None:
     """Create a workspace VM for PROJECT (a folder under developer_dir); asks for what is missing."""
     app.require("rsync", "limactl")
     created_at = instance.utc_now()  # when the user started, not when they finished answering the prompts
     request = wizard.fill(app.config, app.runner, app.interactive, project, workspace, branch, no_branch)
     aws = aws_wanted(app, aws)  # asked here so every prompt precedes the clone
+    hooks = hooks_wanted(app, hooks)
     ws = app.workspace(request.project, request.workspace)
     instance.new(
         ws,
@@ -197,6 +238,7 @@ def new(app: App, project, workspace, branch, no_branch, cpus, memory, disk, aws
         disk=disk,
         created_at=created_at,
         aws=aws,
+        hooks=hooks,
     )
     if app.interactive and click.confirm("Open a shell in it now?", default=True, err=True):
         sys.exit(instance.open_shell(ws))
@@ -212,11 +254,13 @@ def sync(app: App, project: str, workspace: str) -> None:
 
 @workspace_command("sync-claude")
 @AWS_OPTION
+@HOOKS_OPTION
 @pass_app
-def sync_claude(app: App, project: str, workspace: str, aws: bool | None) -> None:
+def sync_claude(app: App, project: str, workspace: str, aws: bool | None, hooks: bool | None) -> None:
     """Push the Claude token, Claude config, git config and (if confirmed) AWS config into the VM again."""
     app.require("rsync")
-    instance.sync_claude(app.workspace(project, workspace), aws=aws_wanted(app, aws))
+    aws = aws_wanted(app, aws)
+    instance.sync_claude(app.workspace(project, workspace), aws=aws, hooks=hooks_wanted(app, hooks))
 
 
 @cli.command()

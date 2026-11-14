@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from lima_ai import instance, menu, wizard
-from lima_ai.config import SyncConfig, config_dir, state_dir
+from lima_ai.config import SyncConfig, config_dir, load_config, state_dir
 from lima_ai.errors import LimaAiError
 from tests.conftest import CARD, GUEST_HOME
 from tests.fakes import lima_list
@@ -1163,3 +1163,169 @@ def test_sync_claude_copies_aws_without_asking_outside_a_terminal(env):
     assert result.exit_code == 0, result.output
     assert "[Y/n]" not in result.output
     assert len(aws_pushes(env)) == 1
+
+
+# --- host hooks ----------------------------------------------------------------------
+
+
+def with_host_hooks(env, *rels):
+    """Hook scripts under the fake home plus a settings.json running each; returns their commands."""
+    commands = []
+    for rel in rels:
+        (env.home / rel).parent.mkdir(parents=True, exist_ok=True)
+        (env.home / rel).write_text("#!/bin/sh\n")
+        commands.append(f"{env.home}/{rel}")
+    hooks = {"Stop": [{"hooks": [{"type": "command", "command": c} for c in commands]}]}
+    (env.home / ".claude/settings.json").write_text(json.dumps({"hooks": hooks}))
+    return commands
+
+
+def answer_checklist(monkeypatch, answer, on_ask=lambda: None):
+    """Stub the hook checklist; returns the list of `ticked` sets it was shown with."""
+    asked = []
+
+    def choose_hooks(offered, ticked, home, **kwargs):
+        on_ask()
+        asked.append(set(ticked))
+        return answer
+
+    monkeypatch.setattr(menu, "choose_hooks", choose_hooks)
+    return asked
+
+
+def saved_hooks(env, hooks, skipped=()):
+    env.cfg = dataclasses.replace(env.cfg, sync=SyncConfig(hooks=tuple(hooks), hooks_skipped=tuple(skipped)))
+
+
+def sync_claude_hooks(env, *flags, interactive=True):
+    env.write_token()
+    existing(env)
+    return env.invoke(["sync-claude", "preludian/myapp", "feat-a", "--no-aws", *flags], interactive=interactive)
+
+
+def script_copies(env):
+    return env.runner.find("--relative")
+
+
+def test_sync_claude_asks_which_hooks_and_saves_both_lists(env, monkeypatch):
+    a, b = with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    asked = answer_checklist(monkeypatch, [a])
+    result = sync_claude_hooks(env)
+    assert result.exit_code == 0, result.output
+    assert asked == [set()]
+    sync = load_config().sync
+    assert (sync.hooks, sync.hooks_skipped) == ((a,), (b,))
+    [copy] = script_copies(env)
+    assert ".x/a.sh" in copy.argv and ".x/b.sh" not in copy.argv
+    assert f"Saved hooks under [sync] in {config_dir() / 'config.toml'}; run with --hooks to choose again." in (
+        result.output
+    )
+
+
+def test_sync_claude_applies_saved_hooks_without_asking(env, monkeypatch):
+    a, b = with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    saved_hooks(env, [a], [b])
+    asked = answer_checklist(monkeypatch, [])
+    result = sync_claude_hooks(env)
+    assert result.exit_code == 0, result.output
+    assert asked == []
+    [copy] = script_copies(env)
+    assert ".x/a.sh" in copy.argv and ".x/b.sh" not in copy.argv
+
+
+def test_sync_claude_asks_again_when_a_new_hook_appears(env, monkeypatch):
+    a, b = with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    saved_hooks(env, [a])
+    asked = answer_checklist(monkeypatch, [a, b])
+    result = sync_claude_hooks(env)
+    assert result.exit_code == 0, result.output
+    assert asked == [{a}]
+    assert load_config().sync.hooks == (a, b)
+
+
+def test_no_hooks_flag_copies_none_and_saves_nothing(env, monkeypatch):
+    with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    asked = answer_checklist(monkeypatch, [])
+    result = sync_claude_hooks(env, "--no-hooks")
+    assert result.exit_code == 0, result.output
+    assert asked == [] and not script_copies(env)
+    assert not (config_dir() / "config.toml").exists()
+
+
+def test_no_hooks_flag_leaves_saved_hooks_out_this_time(env, monkeypatch):
+    a, b = with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    saved_hooks(env, [a], [b])
+    answer_checklist(monkeypatch, [])
+    result = sync_claude_hooks(env, "--no-hooks")
+    assert result.exit_code == 0, result.output
+    assert not script_copies(env)
+
+
+def test_hooks_flag_asks_even_when_the_saved_answer_covers_everything(env, monkeypatch):
+    a, b = with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    saved_hooks(env, [a], [b])
+    asked = answer_checklist(monkeypatch, [b])
+    result = sync_claude_hooks(env, "--hooks")
+    assert result.exit_code == 0, result.output
+    assert asked == [{a}]
+    sync = load_config().sync
+    assert (sync.hooks, sync.hooks_skipped) == ((b,), (a,))
+
+
+def test_outside_a_terminal_hooks_are_never_asked(env, monkeypatch):
+    with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    asked = answer_checklist(monkeypatch, [])
+    result = sync_claude_hooks(env, interactive=False)
+    assert result.exit_code == 0, result.output
+    assert asked == [] and not script_copies(env)
+
+
+def test_outside_a_terminal_saved_hooks_still_apply(env, monkeypatch):
+    a, _b = with_host_hooks(env, ".x/a.sh", ".x/b.sh")
+    saved_hooks(env, [a])
+    asked = answer_checklist(monkeypatch, [])
+    result = sync_claude_hooks(env, "--hooks", interactive=False)
+    assert result.exit_code == 0, result.output
+    assert asked == []
+    [copy] = script_copies(env)
+    assert ".x/a.sh" in copy.argv and ".x/b.sh" not in copy.argv
+
+
+def test_no_question_when_no_hook_is_offered(env, monkeypatch):
+    asked = answer_checklist(monkeypatch, [])
+    result = sync_claude_hooks(env)
+    assert result.exit_code == 0, result.output
+    assert asked == []
+
+
+def test_cancelling_the_hook_checklist_aborts(env, monkeypatch):
+    with_host_hooks(env, ".x/a.sh")
+    answer_checklist(monkeypatch, None)
+    result = sync_claude_hooks(env)
+    assert result.exit_code == 1
+    assert not env.runner.find("limactl shell")
+    assert not (config_dir() / "config.toml").exists()
+
+
+def test_saving_hooks_keeps_entries_the_host_no_longer_has(env, monkeypatch):
+    [a] = with_host_hooks(env, ".x/a.sh")
+    saved_hooks(env, ["gone-a"], ["gone-b"])
+    answer_checklist(monkeypatch, [a])
+    result = sync_claude_hooks(env)
+    assert result.exit_code == 0, result.output
+    sync = load_config().sync
+    assert (sync.hooks, sync.hooks_skipped) == ((a, "gone-a"), ("gone-b",))
+
+
+def test_new_asks_about_hooks_before_the_clone(env, monkeypatch):
+    [a] = with_host_hooks(env, ".x/a.sh")
+    clones_when_asked = []
+    answer_checklist(monkeypatch, [a], on_ask=lambda: clones_when_asked.append(len(env.runner.find("limactl clone"))))
+    env.write_token()
+    base_then_clone(env)
+    args = ["new", "preludian/myapp", "feat-a", "--no-branch", "--no-aws"]
+    result = env.invoke(args, input="n\n", interactive=True)
+    assert result.exit_code == 0, result.output
+    assert clones_when_asked == [0]
+    assert env.runner.find("limactl clone")
+    assert len(script_copies(env)) == 1

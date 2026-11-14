@@ -188,9 +188,11 @@ def ssh_keys_wanted(ws: Workspace) -> bool:
     return answer
 
 
-def push_claude_and_git(ws: Workspace, instance: Instance, ssh_keys: bool, aws: bool) -> None:
+def push_claude_and_git(
+    ws: Workspace, instance: Instance, ssh_keys: bool, aws: bool, hooks: tuple[str, ...] = ()
+) -> None:
     note("==> Claude config")
-    push_claude_config(ws.runner, instance, ws.guest_home, ws.cfg.developer_dir, ws.host_home)
+    push_claude_config(ws.runner, instance, ws.guest_home, ws.cfg.developer_dir, ws.host_home, keep_hooks=hooks)
     push_claude_setup(ws)
     note("==> Git config" + (" and SSH keys" if ssh_keys else ""))
     push_git_config(ws.runner, instance, ws.host_home, ssh_keys=ssh_keys)
@@ -267,11 +269,13 @@ def new(
     disk: str | None = None,
     created_at: str | None = None,
     aws: bool = False,
+    hooks: tuple[str, ...] = (),
 ) -> None:
     """Clone dev-base into a workspace VM and fill it.
 
     `created_at` is when the user started `new` (the CLI takes it before its prompts); it defaults to now.
     `aws` copies the host's ~/.aws in as well (the CLI asks).
+    `hooks` are the host Claude Code hook commands whose scripts go in too (the CLI asks).
     """
     created_at = created_at or utc_now()
     cfg, lima = ws.cfg, ws.lima
@@ -304,7 +308,7 @@ def new(
         instance = ws.running_instance()
         note("==> Claude token")
         push_token(ws, token)
-        push_claude_and_git(ws, instance, ssh_keys, aws)
+        push_claude_and_git(ws, instance, ssh_keys, aws, hooks)
         note("==> Guest tools")
         push_info_script(ws)
         push_prompt(ws)
@@ -332,13 +336,13 @@ def sync(ws: Workspace) -> None:
     sync_project(ws, ws.running_instance(), ask=True)
 
 
-def sync_claude(ws: Workspace, aws: bool = False) -> None:
+def sync_claude(ws: Workspace, aws: bool = False, hooks: tuple[str, ...] = ()) -> None:
     token = auth.read_token()
     instance = ws.running_instance()
     ssh_keys = ssh_keys_wanted(ws)
     note("==> Claude token")
     push_token(ws, token)
-    push_claude_and_git(ws, instance, ssh_keys, aws)
+    push_claude_and_git(ws, instance, ssh_keys, aws, hooks)
     note("==> Guest tools")
     push_info_script(ws)
     push_prompt(ws)
