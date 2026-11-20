@@ -33,6 +33,7 @@ SETTINGS: tuple[tuple[str | None, str, str], ...] = (
     ("sync", "hooks", "host hook commands copied into VMs; unset = ask once and save the answer"),
     ("sync", "hooks_skipped", "host hook commands seen and declined"),
     ("base", "hook", "a script lima-ai base runs as root in dev-base after its own provisioning"),
+    ("new", "post_create", "commands lima-ai new runs on the Mac once the VM is ready"),
 )
 
 # What an unset optional key means, for `lima-ai config`, and an example value for the template.

@@ -284,3 +284,20 @@ def test_saving_an_existing_key_keeps_its_place_and_its_comment(tmp_path):
         "ssh_keys = false  # work laptop",
         'hooks = ["c"]  # mine',
     ]
+
+
+def test_post_create_defaults_to_no_commands(tmp_path):
+    assert load_config(tmp_path / "absent.toml").new.post_create == ()
+
+
+def test_post_create_is_a_list_of_commands(tmp_path):
+    cfg = load_config(write(tmp_path, "[new]\npost_create = ['limactl copy a \"$LIMA_AI_VM\":a', 'echo b']\n"))
+    assert cfg.new.post_create == ('limactl copy a "$LIMA_AI_VM":a', "echo b")
+
+
+def test_post_create_must_be_a_list(tmp_path):
+    """A lone string must not be taken as one command per character."""
+    with pytest.raises(LimaAiError) as excinfo:
+        load_config(write(tmp_path, '[new]\npost_create = "echo a"\n'))
+    assert "'new.post_create'" in excinfo.value.message
+    assert "a list of strings" in excinfo.value.message
