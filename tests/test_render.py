@@ -319,6 +319,32 @@ def info_card(
     return subprocess.run(["bash", "-c", guest_script("lima-ai-info")], env=env, capture_output=True, text=True)
 
 
+def info_with_args(tmp_path, *args, instance_file: bool = True):
+    """Run lima-ai-info with arguments under a throwaway HOME (see guest_home)."""
+    _, env = guest_home(tmp_path, instance_file)
+    argv = ["bash", "-c", guest_script("lima-ai-info"), "lima-ai-info", *args]
+    return subprocess.run(argv, env=env, capture_output=True, text=True)
+
+
+def test_lima_ai_info_fqdn_prints_only_the_name(tmp_path):
+    result = info_with_args(tmp_path, "--fqdn")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "lima-dev-myapp-feat-a.local\n"
+
+
+def test_lima_ai_info_fqdn_needs_no_instance_file(tmp_path):
+    result = info_with_args(tmp_path, "--fqdn", instance_file=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "lima-dev-myapp-feat-a.local\n"
+
+
+def test_lima_ai_info_rejects_unknown_arguments(tmp_path):
+    result = info_with_args(tmp_path, "--nope")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "usage: lima-ai-info [--fqdn]" in result.stderr
+
+
 def test_lima_ai_info_prints_the_card(tmp_path):
     result = info_card(tmp_path)
     assert result.returncode == 0, result.stderr

@@ -2,13 +2,26 @@
 # Prints this VM's connection card, then a few tips about the box. lima-ai
 # installs it into ~/.local/bin of every workspace VM, runs it at the end of
 # `lima-ai new`, and the bash prompt runs it once per shell session; it is the
-# one place that formats these details.
+# one place that formats these details. With --fqdn it prints only the VM's name.
 set -euo pipefail
 
 # The host runs this through a non-interactive shell, where ~/.bashrc has not
 # put the per-user tool directories on PATH; add them so the tool list does
 # not depend on how the script was started.
 PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/fnm/aliases/default/bin:$PATH"
+
+fqdn="$(hostname).local"
+
+# `lima-ai-info --fqdn` prints the name alone, for scripts and for Claude; it
+# needs no instance file, so it also works on a VM made before that file existed.
+if [ "$#" -gt 0 ]; then
+  if [ "$#" -eq 1 ] && [ "$1" = "--fqdn" ]; then
+    echo "$fqdn"
+    exit 0
+  fi
+  echo "usage: lima-ai-info [--fqdn]" >&2
+  exit 2
+fi
 
 file="$HOME/.config/lima-ai/instance"
 if [ ! -f "$file" ]; then
@@ -17,7 +30,6 @@ if [ ! -f "$file" ]; then
 fi
 . "$file"
 
-fqdn="$(hostname).local"
 ip="$( (ip -4 -o addr show lima0 2>/dev/null || true) | sed -nE 's/.*inet ([0-9.]+)\/.*/\1/p' | head -n 1)"
 ip="${ip:-unknown}"
 
