@@ -44,7 +44,7 @@ instead.
 | Command | What it does |
 |---|---|
 | `lima-ai-info` | Print the VM's connection card (project, workspace, FQDN, IP, creation time and current git branch), then tips: the Ubuntu release, the `cc` alias, which of the base image's tools are installed, and `rtk gain`. `lima-ai-info --fqdn` prints only the VM's name, for scripts and for Claude |
-| `lima-ai-claude-setup` | Mark Claude's onboarding as done in `~/.claude.json` and wire rtk into `~/.claude` (`rtk init -g --auto-patch`); both commands run it after copying the Claude config |
+| `lima-ai-claude-setup` | Mark Claude's onboarding as done in `~/.claude.json` and wire rtk into `~/.claude` (`rtk init -g --auto-patch`), then write `~/.claude/LIMA_AI.md` (tells Claude to bind to `0.0.0.0` and give URLs with the VM's name) and reference it from `CLAUDE.md`; both commands run it after copying the Claude config |
 
 `new` runs it for you when the VM is ready. It reads `~/.config/lima-ai/instance`,
 which `new` writes; on a VM made by an older lima-ai, `sync-claude` creates
