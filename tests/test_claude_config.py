@@ -337,7 +337,8 @@ def test_a_path_with_a_parent_step_is_not_offered(tmp_path):
     assert filter_hooks(settings, home, dev) == {"hooks": {}}
 
 
-def test_push_leaves_existing_guest_directories_as_they_are(tmp_path):
+def test_push_sends_the_folders_of_kept_hook_scripts(tmp_path):
+    """macOS's rsync sending with --no-implied-dirs is refused by the VM's rsync 3.4 ("invalid path from sender")."""
     runner = push(tmp_path, [f"{tmp_path}/home/.claude/hooks/block.sh"])
     [call] = runner.find("--relative")
-    assert "--no-implied-dirs" in call.argv
+    assert "--no-implied-dirs" not in call.argv

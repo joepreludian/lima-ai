@@ -226,12 +226,13 @@ def push_claude_config(
         )
         if kept:
             # Paths relative to the host home, so each script lands at the same place under the guest home.
-            # openrsync ignores the /./ anchor, hence cwd. --no-implied-dirs: folders that already exist
-            # in the guest (~/.claude) keep their own mode and times.
+            # openrsync ignores the /./ anchor, hence cwd. The folders on the way are sent too, so ones
+            # the guest already has take the host's mode and times: the guest's rsync 3.4 refuses
+            # openrsync's file list when --no-implied-dirs leaves them out ("invalid path from sender").
             files = sorted({path for choice in kept for path in choice.files})
             home_dest = f"{ssh_host(instance.name)}:"
             runner.run(
-                rsync_argv(files, home_dest, instance.ssh_config, ["--relative", "--no-implied-dirs", "--copy-links"]),
+                rsync_argv(files, home_dest, instance.ssh_config, ["--relative", "--copy-links"]),
                 step="sync-claude",
                 cwd=host_home,
             )
