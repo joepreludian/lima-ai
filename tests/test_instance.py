@@ -1487,12 +1487,16 @@ def test_new_runs_the_post_create_commands_in_order_once_the_vm_is_filled(env):
         "LIMA_AI_WORKSPACE=feat-a",
         f"LIMA_AI_FQDN=lima-{INSTANCE}.local",
     ]
-    # Each command reaches bash as one argument, exactly as written in config.toml.
-    assert [call.argv for call in calls] == [["env", *variables, "bash", "-c", command] for command in POST_CREATE]
+    # Each command reaches bash as one argument, as written in config.toml, behind a line that sends
+    # its stdout to stderr: lima-ai's own stdout carries the connection card only.
+    assert [call.argv for call in calls] == [
+        ["env", *variables, "bash", "-c", "exec >&2\n" + command] for command in POST_CREATE
+    ]
+    # They own the terminal: a command that prompts or reports progress is seen while it runs.
+    assert all(call.interactive for call in calls)
     cmds = env.runner.commands
     assert cmds.index(calls[0].command) > max(i for i, c in enumerate(cmds) if c.startswith("rsync "))
-    assert "==> Post-create commands" in result.output
-    assert CARD in result.output
+    assert result.output.index("==> Post-create commands") < result.output.index(CARD)
 
 
 def test_new_without_post_create_commands_runs_none(env):
@@ -1508,14 +1512,14 @@ def test_a_failing_post_create_command_stops_the_rest_and_keeps_the_vm(env):
     env.write_token()
     base_then_clone(env)
     with_post_create(env)
-    env.runner.on("limactl copy", returncode=3, stderr="boom\n")
+    env.runner.on("limactl copy", returncode=3)
     result = env.invoke(["new", "preludian/myapp", "feat-a"])
     assert result.exit_code != 0
     assert len(post_create_calls(env)) == 1  # the second command did not run
     assert "error [post-create]" in result.output
     assert POST_CREATE[0] in result.output and "(exit 3)" in result.output
-    assert "boom" in result.output
     assert f"{INSTANCE} is ready and kept" in result.output
+    assert CARD in result.output  # the VM is usable: its connection details are still shown
     assert "lima-ai shell preludian/myapp feat-a" in result.output
     assert "destroy" not in result.output
 

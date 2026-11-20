@@ -61,13 +61,16 @@ works for every VM:
 | Variable | Value |
 |---|---|
 | `LIMA_AI_VM` | the Lima instance name, as `limactl` wants it (`dev-myapp-feat-a`) |
-| `LIMA_AI_PROJECT` | the project, as you pass it to `new` (`preludian/myapp`) |
-| `LIMA_AI_WORKSPACE` | the workspace (`feat-a`) |
+| `LIMA_AI_PROJECT` | the project's path under `developer_dir` (`preludian/myapp`) |
+| `LIMA_AI_WORKSPACE` | the workspace, in the form `list` shows (`feat-a`) |
 | `LIMA_AI_FQDN` | the VM's name on your network (`lima-dev-myapp-feat-a.local`) |
 
 To run something inside the VM, call `limactl shell "$LIMA_AI_VM" ...`
-yourself. When a command fails, `new` stops there and shows the command and
-its error; the VM is ready and kept, and the commands after it are not run.
+yourself. The commands run in the folder you started `lima-ai new` from and
+use your terminal, so you see their output as they run and can answer a
+prompt. When a command fails, `new` stops there and names the command; the
+VM is ready and kept, its connection card is still printed, and the
+commands after it are not run.
 Only `new` runs them: `sync`, `sync-claude` and `start` do not.
 
 `lima-ai config` prints the settings in effect, defaults included, headed by
