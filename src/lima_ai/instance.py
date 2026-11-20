@@ -15,7 +15,7 @@ from lima_ai.gitconfig import find_private_keys, push_git_config
 from lima_ai.limactl import Instance, Limactl, gib
 from lima_ai.naming import BASE_INSTANCE, project_dir, resolve
 from lima_ai.render import GUEST_BACKUPS, guest_script, render_env, render_instance_file, rsync_excludes
-from lima_ai.runner import Runner
+from lima_ai.runner import STDERR_TAIL_LINES, Runner
 from lima_ai.sync import progress_flags, project_argv
 
 MAX_LISTED_COMMITS = 20
@@ -173,6 +173,38 @@ def ensure_instance_file(ws: Workspace) -> None:
         push_instance_file(ws, info.get("created_at", "unknown"))
 
 
+def run_post_create(ws: Workspace) -> None:
+    """Run the user's `[new] post_create` commands on the host, in order; the first failure stops the rest.
+
+    Each goes through `bash -c` with the VM's names in its environment, so one line serves every VM.
+    """
+    commands = ws.cfg.new.post_create
+    if not commands:
+        return
+    variables = [
+        f"LIMA_AI_VM={ws.name}",
+        f"LIMA_AI_PROJECT={ws.names.project}",
+        f"LIMA_AI_WORKSPACE={ws.names.workspace}",
+        f"LIMA_AI_FQDN={ws.names.mdns}",
+    ]
+    note("==> Post-create commands")
+    for command in commands:
+        note(f"    {command}")
+        result = ws.runner.run(["env", *variables, "bash", "-c", command], check=False, step="post-create")
+        if result.stdout:
+            click.echo(result.stdout, nl=False, err=True)
+        if result.returncode != 0:
+            tail = "\n".join((result.stderr or "").strip().splitlines()[-STDERR_TAIL_LINES:])
+            raise LimaAiError(
+                "post-create",
+                f"`{command}` failed (exit {result.returncode})\n"
+                f"{ws.name} is ready and kept; open it with `{ws.hint('shell')}`. "
+                "The post_create commands after this one did not run: "
+                "fix the command under [new] in config.toml and run the rest yourself.",
+                tail,
+            )
+
+
 def ssh_keys_wanted(ws: Workspace) -> bool:
     """Whether ~/.ssh private keys go into the VM: the config.toml answer, or ask once and save it."""
     setting = ws.cfg.sync.ssh_keys
@@ -327,6 +359,7 @@ def new(
             err.stderr_tail,
         ) from None
 
+    run_post_create(ws)
     click.echo(card, nl=False)  # as the VM printed it: the host adds nothing to the connection details
     click.echo(f"Open it with: {ws.hint('shell')}")
     click.echo(backups_notice(cfg), nl=False)

@@ -114,6 +114,10 @@ variant, and how to move data to and from the Mac's Docker.
 - **The project**, including `.git/` and `.env*` files. Left out:
   `node_modules/`, `target/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`,
   `build/`, `.next/`, `.nuxt/`, `.turbo/`, `.cache/` and `.DS_Store`.
+- **Anything else you need**, with your own commands. List them as
+  `post_create` under `[new]` in `config.toml` and `lima-ai new` runs them
+  on your Mac once the VM is ready, for example to copy a settings file one
+  of your hook scripts reads. See [Configuration](configuration.md).
 
 !!! warning "Upgrading from 0.12"
 

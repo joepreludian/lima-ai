@@ -1459,3 +1459,71 @@ def test_hooks_help_says_which_flag_asks(env):
     text = " ".join(result.output.split())
     assert "--hooks shows the hook checklist again" in text
     assert "--no-hooks copies none this time and saves nothing" in text
+
+
+POST_CREATE = ('limactl copy ~/.claude-display/hook.env "$LIMA_AI_VM":.claude-display/hook.env', "echo 'second one'")
+
+
+def with_post_create(env, commands=POST_CREATE):
+    from lima_ai.config import NewConfig
+
+    env.cfg = dataclasses.replace(env.cfg, new=NewConfig(post_create=tuple(commands)))
+
+
+def post_create_calls(env):
+    return [call for call in env.runner.calls if call.argv[0] == "env" and f"LIMA_AI_VM={INSTANCE}" in call.argv]
+
+
+def test_new_runs_the_post_create_commands_in_order_once_the_vm_is_filled(env):
+    env.write_token()
+    base_then_clone(env)
+    with_post_create(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    calls = post_create_calls(env)
+    variables = [
+        f"LIMA_AI_VM={INSTANCE}",
+        "LIMA_AI_PROJECT=preludian/myapp",
+        "LIMA_AI_WORKSPACE=feat-a",
+        f"LIMA_AI_FQDN=lima-{INSTANCE}.local",
+    ]
+    # Each command reaches bash as one argument, exactly as written in config.toml.
+    assert [call.argv for call in calls] == [["env", *variables, "bash", "-c", command] for command in POST_CREATE]
+    cmds = env.runner.commands
+    assert cmds.index(calls[0].command) > max(i for i, c in enumerate(cmds) if c.startswith("rsync "))
+    assert "==> Post-create commands" in result.output
+    assert CARD in result.output
+
+
+def test_new_without_post_create_commands_runs_none(env):
+    env.write_token()
+    base_then_clone(env)
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert not [call for call in env.runner.calls if call.argv[0] == "env"]
+    assert "Post-create" not in result.output
+
+
+def test_a_failing_post_create_command_stops_the_rest_and_keeps_the_vm(env):
+    env.write_token()
+    base_then_clone(env)
+    with_post_create(env)
+    env.runner.on("limactl copy", returncode=3, stderr="boom\n")
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code != 0
+    assert len(post_create_calls(env)) == 1  # the second command did not run
+    assert "error [post-create]" in result.output
+    assert POST_CREATE[0] in result.output and "(exit 3)" in result.output
+    assert "boom" in result.output
+    assert f"{INSTANCE} is ready and kept" in result.output
+    assert "lima-ai shell preludian/myapp feat-a" in result.output
+    assert "destroy" not in result.output
+
+
+def test_sync_claude_runs_no_post_create_command(env):
+    env.write_token()
+    existing(env)
+    with_post_create(env)
+    result = env.invoke(["sync-claude", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert post_create_calls(env) == []
