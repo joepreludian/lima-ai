@@ -46,6 +46,7 @@ EXAMPLE = {"ssh_keys": False, "hooks": ("~/.claude/hooks/check.sh",), "hook": "~
 
 
 def _toml_value(value) -> str:
+    # ensure_ascii=False: json would write an emoji as a surrogate pair, which TOML rejects.
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, int):
@@ -53,8 +54,8 @@ def _toml_value(value) -> str:
     if isinstance(value, Path):
         return json.dumps(display_path(value))
     if isinstance(value, tuple):
-        return "[" + ", ".join(json.dumps(item) for item in value) + "]"
-    return json.dumps(value)
+        return "[" + ", ".join(json.dumps(item, ensure_ascii=False) for item in value) + "]"
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _lines(cfg: Config | None) -> list[str]:

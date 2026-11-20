@@ -1,3 +1,4 @@
+import dataclasses
 import tomllib
 from pathlib import Path
 
@@ -107,3 +108,13 @@ def test_post_create_shows_in_the_settings_and_the_template(tmp_path):
     text = effective_toml(Config(), tmp_path / "config.toml")
     assert "[new]" in text and "post_create = []" in text
     assert "# post_create = []" in template_toml()
+
+
+def test_effective_toml_with_quoted_and_non_ascii_commands_loads_back(tmp_path):
+    from lima_ai.config import NewConfig
+
+    commands = ('echo "done 🎉" > ~/café.txt', "echo 'it''s'")
+    path = tmp_path / "config.toml"
+    path.write_text(effective_toml(dataclasses.replace(Config(), new=NewConfig(post_create=commands)), path))
+    assert load_config(path).new.post_create == commands
+    assert "🎉" in path.read_text()
