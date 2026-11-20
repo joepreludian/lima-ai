@@ -49,9 +49,16 @@ EOF
 # Every Claude config copy replaces CLAUDE.md with the host's, so the reference
 # is added again each time, once, on a line of its own.
 claude_md="$HOME/.claude/CLAUDE.md"
+# The new content replaces the file instead of being appended to it: rsync keeps
+# the host file's mode, so it may be read-only, and a host CLAUDE.md that is a
+# link to a file the VM does not receive arrives pointing nowhere.
 if ! grep -qxF '@LIMA_AI.md' "$claude_md" 2>/dev/null; then
-  if [ -s "$claude_md" ] && [ -n "$(tail -c 1 "$claude_md")" ]; then
-    echo >> "$claude_md"
-  fi
-  echo '@LIMA_AI.md' >> "$claude_md"
+  {
+    if [ -s "$claude_md" ]; then
+      cat "$claude_md"
+      if [ -n "$(tail -c 1 "$claude_md")" ]; then echo; fi
+    fi
+    echo '@LIMA_AI.md'
+  } > "$claude_md.tmp"
+  mv -f "$claude_md.tmp" "$claude_md"
 fi
