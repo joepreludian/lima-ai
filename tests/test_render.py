@@ -223,6 +223,25 @@ def test_claude_setup_references_the_note_only_once(tmp_path):
     assert (claude / "CLAUDE.md").read_text().count("@LIMA_AI.md") == 1
 
 
+def test_claude_setup_references_the_note_from_a_read_only_claude_md(tmp_path):
+    """rsync keeps the host file's mode, and some dotfile managers make CLAUDE.md read-only."""
+    claude = tmp_path / "home/.claude"
+    claude.mkdir(parents=True)
+    (claude / "CLAUDE.md").write_text("# mine\n")
+    (claude / "CLAUDE.md").chmod(0o444)
+    run_claude_setup(tmp_path)
+    assert (claude / "CLAUDE.md").read_text() == "# mine\n@LIMA_AI.md\n"
+
+
+def test_claude_setup_replaces_a_claude_md_link_that_points_nowhere(tmp_path):
+    """A host CLAUDE.md linked to a file the VM does not receive arrives as a dangling link."""
+    claude = tmp_path / "home/.claude"
+    claude.mkdir(parents=True)
+    (claude / "CLAUDE.md").symlink_to("shared/CLAUDE.md")
+    run_claude_setup(tmp_path)
+    assert (claude / "CLAUDE.md").read_text() == "@LIMA_AI.md\n"
+
+
 def test_claude_setup_creates_claude_md_when_the_host_has_none(tmp_path):
     claude = run_claude_setup(tmp_path)
     assert (claude / "CLAUDE.md").read_text() == "@LIMA_AI.md\n"
