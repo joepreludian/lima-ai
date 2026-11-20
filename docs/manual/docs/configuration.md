@@ -33,6 +33,11 @@ hooks_skipped = []                            # host hook commands seen and decl
 
 [base]
 hook = "~/lima/custom.sh"                     # a script lima-ai base runs as root in dev-base after its own provisioning
+
+[new]
+post_create = [                               # commands lima-ai new runs on the Mac once the VM is ready
+  'limactl copy ~/.claude-display/hook.env "$LIMA_AI_VM":.claude-display/hook.env',
+]
 ```
 
 Mounts, VM defaults and tool versions are fixed when `dev-base` is built.
@@ -45,6 +50,25 @@ The `hook` under `[base]` is your own additions to the image; `lima-ai base
 `sync-claude` show; each entry is a hook command exactly as it appears in
 `~/.claude/settings.json`. [Everyday tasks](everyday.md) explains what is
 offered and what is copied.
+
+`post_create` is for what your VMs need that lima-ai does not know about,
+such as a settings file one of your hook scripts reads. `lima-ai new` runs
+each command on your Mac through `bash -c`, in the order listed, after the
+VM has its token, Claude config, kept hooks and project, and before it
+prints the connection card. Every command gets these variables, so one line
+works for every VM:
+
+| Variable | Value |
+|---|---|
+| `LIMA_AI_VM` | the Lima instance name, as `limactl` wants it (`dev-myapp-feat-a`) |
+| `LIMA_AI_PROJECT` | the project, as you pass it to `new` (`preludian/myapp`) |
+| `LIMA_AI_WORKSPACE` | the workspace (`feat-a`) |
+| `LIMA_AI_FQDN` | the VM's name on your network (`lima-dev-myapp-feat-a.local`) |
+
+To run something inside the VM, call `limactl shell "$LIMA_AI_VM" ...`
+yourself. When a command fails, `new` stops there and shows the command and
+its error; the VM is ready and kept, and the commands after it are not run.
+Only `new` runs them: `sync`, `sync-claude` and `start` do not.
 
 `lima-ai config` prints the settings in effect, defaults included, headed by
 a comment naming the file. `lima-ai config --edit` opens that file in
