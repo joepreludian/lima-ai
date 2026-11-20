@@ -53,6 +53,12 @@ class BaseConfig:
 
 
 @dataclass(frozen=True)
+class NewConfig:
+    # Shell commands `lima-ai new` runs on the host, in order, once the VM is filled.
+    post_create: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Config:
     developer_dir: Path = Path("~/Developer")
     backups_dir: Path = Path("~/Developer/backups/docker")
@@ -60,9 +66,10 @@ class Config:
     versions: Versions = field(default_factory=Versions)
     sync: SyncConfig = field(default_factory=SyncConfig)
     base: BaseConfig = field(default_factory=BaseConfig)
+    new: NewConfig = field(default_factory=NewConfig)
 
 
-SECTIONS = {"vm": VmConfig, "versions": Versions, "sync": SyncConfig, "base": BaseConfig}
+SECTIONS = {"vm": VmConfig, "versions": Versions, "sync": SyncConfig, "base": BaseConfig, "new": NewConfig}
 
 
 def config_dir() -> Path:

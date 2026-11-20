@@ -34,7 +34,7 @@ def test_effective_toml_shows_file_values_and_escapes_strings(tmp_path):
 def test_template_toml_is_all_comments_under_live_headers(tmp_path):
     text = template_toml()
     data = tomllib.loads(text)
-    assert data == {"vm": {}, "versions": {}, "sync": {}, "base": {}}
+    assert data == {"vm": {}, "versions": {}, "sync": {}, "base": {}, "new": {}}
     assert "# cpus = 4" in text and '# hook = "~/lima/custom.sh"' in text
     assert "# ssh_keys = false" in text
 
@@ -101,3 +101,9 @@ def test_hooks_show_as_unset_and_in_the_template(tmp_path):
     text = effective_toml(Config(), tmp_path / "config.toml")
     assert "# hooks is unset" in text and "hooks_skipped = []" in text
     assert '# hooks = ["~/.claude/hooks/check.sh"]' in template_toml()
+
+
+def test_post_create_shows_in_the_settings_and_the_template(tmp_path):
+    text = effective_toml(Config(), tmp_path / "config.toml")
+    assert "[new]" in text and "post_create = []" in text
+    assert "# post_create = []" in template_toml()
