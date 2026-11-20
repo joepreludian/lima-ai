@@ -68,8 +68,8 @@ variant, and how to move data to and from the Mac's Docker.
   quotes or escapes it, as the shell needs; a path with a `..` step is
   never listed. Ticked hooks stay in the VM's
   `settings.json`, and their script files are copied to the same place
-  under the VM's home; folders that already exist there keep their own
-  permissions. The answer is saved as `hooks` (ticked) and
+  under the VM's home; the folders on the way to a script take your Mac's
+  permissions and times, also when they already exist in the VM. The answer is saved as `hooks` (ticked) and
   `hooks_skipped` (declined) under `[sync]` in `config.toml` and reused for
   every VM; you are asked again only when a hook appears that is in neither
   list. `--hooks` shows the checklist again (or says there is nothing to choose
