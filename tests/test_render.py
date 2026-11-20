@@ -183,6 +183,51 @@ def test_claude_setup_script_marks_onboarding_done_and_wires_rtk():
     assert "</dev/null" in text  # rtk must not read the script's stdin
 
 
+def run_claude_setup(tmp_path, claude_md: str | None = None, times: int = 1):
+    """Run lima-ai-claude-setup under a throwaway HOME with a do-nothing rtk; returns the guest ~/.claude."""
+    home = tmp_path / "home"
+    (home / ".local/bin").mkdir(parents=True, exist_ok=True)
+    rtk = home / ".local/bin/rtk"
+    rtk.write_text("#!/bin/sh\nexit 0\n")
+    rtk.chmod(0o755)
+    claude = home / ".claude"
+    if claude_md is not None:
+        claude.mkdir(exist_ok=True)
+        (claude / "CLAUDE.md").write_text(claude_md)
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(home)}
+    for _ in range(times):
+        subprocess.run(["bash", "-c", guest_script("lima-ai-claude-setup")], env=env, check=True)
+    return claude
+
+
+def test_claude_setup_writes_the_vm_note(tmp_path):
+    note = (run_claude_setup(tmp_path, "# mine\n") / "LIMA_AI.md").read_text()
+    assert "lima-ai workspace VM" in note
+    assert "`0.0.0.0`" in note
+    assert "`lima-ai-info --fqdn`" in note
+    assert "Do not edit project configuration" in " ".join(note.split())
+
+
+def test_claude_setup_references_the_note_from_claude_md(tmp_path):
+    claude = run_claude_setup(tmp_path, "# mine\n")
+    assert (claude / "CLAUDE.md").read_text() == "# mine\n@LIMA_AI.md\n"
+
+
+def test_claude_setup_puts_the_reference_on_its_own_line(tmp_path):
+    claude = run_claude_setup(tmp_path, "# mine")  # no trailing newline
+    assert (claude / "CLAUDE.md").read_text() == "# mine\n@LIMA_AI.md\n"
+
+
+def test_claude_setup_references_the_note_only_once(tmp_path):
+    claude = run_claude_setup(tmp_path, "# mine\n", times=2)
+    assert (claude / "CLAUDE.md").read_text().count("@LIMA_AI.md") == 1
+
+
+def test_claude_setup_creates_claude_md_when_the_host_has_none(tmp_path):
+    claude = run_claude_setup(tmp_path)
+    assert (claude / "CLAUDE.md").read_text() == "@LIMA_AI.md\n"
+
+
 def test_guest_scripts_are_available(cfg):
     verify = guest_script("verify-base.sh")
     for check in [

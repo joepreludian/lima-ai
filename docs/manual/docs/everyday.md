@@ -50,6 +50,15 @@ variant, and how to move data to and from the Mac's Docker.
   you in without the first-run wizard, and runs `rtk init -g --auto-patch`,
   which adds the rtk hook to `settings.json`, writes `RTK.md` and
   references it from `CLAUDE.md`.
+  It also writes `LIMA_AI.md` into the VM's `~/.claude` and references it
+  from `CLAUDE.md` the same way. That note tells Claude it is running in a
+  VM while your browser is on the Mac: bind anything that listens on a port
+  to `0.0.0.0`, and give you URLs with the VM's name (from
+  `lima-ai-info --fqdn`) instead of `localhost` or an IP address. When a dev
+  server refuses the VM's name (Vite, Django and Rails check it), Claude
+  tells you and suggests the change; it does not edit the project's
+  configuration unless you ask. The note exists only in the VM: it is never
+  written to your Mac's `~/.claude` or into the project.
 - **Host hooks**, the ones you tick. A hook in `settings.json` is removed
   when its command runs a file under your home folder that the VM does not
   receive, such as a script in `~/.claude/hooks/`. The first time `new` or

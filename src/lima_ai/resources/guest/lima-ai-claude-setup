@@ -6,6 +6,8 @@
 #   (the installer creates ~/.claude.json itself, so the file already exists);
 # - wires rtk into the settings.json and CLAUDE.md just copied from the host:
 #   the PreToolUse hook, ~/.claude/RTK.md and its @RTK.md reference.
+# - writes ~/.claude/LIMA_AI.md, the note telling Claude it runs in a VM (bind to
+#   0.0.0.0, give URLs with the VM's name), and references it from CLAUDE.md.
 set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -19,3 +21,37 @@ fi
 chmod 600 "$file"
 
 rtk init -g --auto-patch </dev/null >/dev/null
+
+# The note exists only in the VM: it is written here, never copied from or to the host.
+mkdir -p "$HOME/.claude"
+cat > "$HOME/.claude/LIMA_AI.md" <<'EOF'
+# lima-ai VM
+
+You are running inside a lima-ai workspace VM. The developer's browser and
+tools are on another machine (their Mac), so `localhost` here is not their
+`localhost`.
+
+When you start or configure anything that listens on a port (a dev server, an
+API, a database, a container, a socket):
+
+- Bind it to `0.0.0.0`, never only to `localhost` or `127.0.0.1`. For
+  containers, publish ports on all interfaces (`"3000:3000"`, not
+  `"127.0.0.1:3000:3000"`).
+- Run `lima-ai-info --fqdn` to get this VM's name and use it in every URL you
+  give the developer: `http://<that name>:3000`, not `http://localhost:3000`
+  and not an IP address. Read the name; do not guess it.
+- Some dev servers refuse requests for a host name they do not know (Vite
+  `server.allowedHosts`, Django `ALLOWED_HOSTS`, Rails `config.hosts`). When
+  that happens, tell the developer and suggest the change. Do not edit project
+  configuration for this unless they ask.
+EOF
+
+# Every Claude config copy replaces CLAUDE.md with the host's, so the reference
+# is added again each time, once, on a line of its own.
+claude_md="$HOME/.claude/CLAUDE.md"
+if ! grep -qxF '@LIMA_AI.md' "$claude_md" 2>/dev/null; then
+  if [ -s "$claude_md" ] && [ -n "$(tail -c 1 "$claude_md")" ]; then
+    echo >> "$claude_md"
+  fi
+  echo '@LIMA_AI.md' >> "$claude_md"
+fi
