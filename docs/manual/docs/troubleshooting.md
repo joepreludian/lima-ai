@@ -10,6 +10,12 @@ failed. Fix the cause, then run `lima-ai sync …` if the project copy failed,
 or `lima-ai sync-claude …` for the token, Claude, git or AWS steps. To
 start over, run `lima-ai destroy … --force`.
 
+**`new` says "cannot switch to … in the VM".** The branch you asked for
+exists, is not the one checked out on your Mac, and the listed files have
+uncommitted changes that differ on it, so `git switch` would fail once the
+project is copied. Nothing was created. Commit or stash those files, choose
+another branch with `--branch`, or pass `--no-branch` to keep the current one.
+
 **Claude asks you to log in inside a VM.** The token is read from
 `~/.config/lima-ai/env` by every interactive shell, but Claude still shows
 its first-run wizard (theme, then login) until `~/.claude.json` in the VM
@@ -22,8 +28,8 @@ VM, running `lima-ai-claude-setup` does the same.
 
 **A `.local` name does not resolve.** Check that the VM is running
 (`lima-ai list`), then ask macOS directly:
-`dscacheutil -q host -a name lima-dev-myapp-feat-login.local`. The IP that
-`lima-ai new` printed works as well.
+`dscacheutil -q host -a name lima-dev-myapp-feat-login.local`. The IP on
+the card the VM's shell prints (`lima-ai-info`) works as well.
 
 **`aws` says the SSO token is expired or missing.** The VM holds a copy of
 the token your Mac had when the VM was created or last synced. Run

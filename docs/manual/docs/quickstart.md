@@ -82,8 +82,31 @@ host's branch.
 
 In under a minute this clones `dev-base`, starts the clone, copies in your
 Claude token, `~/.claude` config, git config and the project, and switches
-to the branch. The VM then prints its connection card with a few tips about
-the box, and `new` offers to open a shell:
+to the branch. `new` then offers to open a shell:
+
+```
+Open it with: lima-ai shell preludian/myapp feat-login
+Open a shell in it now? [Y/n]:
+```
+
+`new` checks the branch before it creates anything. When the branch already
+exists, is not the one checked out on your Mac, and a file with uncommitted
+changes differs between the two, `git switch` would fail in the VM, so `new`
+stops and lists those files. Commit or stash them, pick another branch with
+`--branch`, or pass `--no-branch`. Uncommitted changes are fine otherwise:
+they are copied into the VM, and a new branch carries them along.
+
+If the project folder has no git repository, `new` says so: no branch is
+created, and `destroy` cannot check that VM for unsaved work.
+
+### 7. Work inside it
+
+```bash
+lima-ai shell preludian/myapp feat-login
+```
+
+The shell greets you with the VM's connection card and a few tips about the
+box, once per session:
 
 ```
 +---------------------------------------------+
@@ -102,21 +125,9 @@ the box, and `new` offers to open a shell:
 * Installed here: docker, git, lazygit, tmux, rg, fzf, jq, node 24, npm, cargo, claude, rtk, docker-backup.
 * rtk trims the command output Claude reads. See what it saved with `rtk gain`.
 * Print this again with `lima-ai-info`.
-Open it with: lima-ai shell preludian/myapp feat-login
-Open a shell in it now? [Y/n]:
 ```
 
-If the project folder has no git repository, `new` says so: no branch is
-created, and `destroy` cannot check that VM for unsaved work.
-
-### 7. Work inside it
-
-```bash
-lima-ai shell preludian/myapp feat-login
-```
-
-The shell greets you with the same card and tips, once per session, and you
-land in the VM's working copy, `~/work/myapp`. From there:
+You land in the VM's working copy, `~/work/myapp`. From there:
 
 ```bash
 docker compose up -d     # your app, on the VM's own address

@@ -184,6 +184,97 @@ def test_new_probes_the_branch_before_switching(env):
     assert probe < cmds.index(f"limactl shell {INSTANCE} git -C {WORKDIR} switch -c feat-a")
 
 
+def host_git(env, tail: str) -> str:
+    return f"git -C {env.cfg.developer_dir / 'preludian/myapp'} {tail}"
+
+
+def existing_branch_with_changes(env, branch="main", current="feat/old", between="uv.lock\0", dirty="", untracked=""):
+    """The host repo: `branch` exists, `current` is checked out, and git lists these files (NUL-separated)."""
+    env.runner.on(f"rev-parse --verify --quiet refs/heads/{branch}", returncode=0)
+    env.runner.on(host_git(env, "symbolic-ref -q --short HEAD"), current + "\n" if current else "", 0 if current else 1)
+    env.runner.on(host_git(env, f"diff --name-only --no-renames -z HEAD {branch}"), between)
+    env.runner.on(host_git(env, "diff --name-only --no-renames -z HEAD --"), dirty)
+    env.runner.on(host_git(env, "ls-files --others --exclude-standard -z"), untracked)
+
+
+def test_new_fails_before_cloning_when_uncommitted_changes_block_the_branch_switch(env):
+    ready(env)
+    existing_branch_with_changes(env, between="README.md\0uv.lock\0src/app.py\0", dirty="uv.lock\0notes.txt\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--branch", "main"])
+    assert result.exit_code == 1
+    assert (
+        "error [preflight]: cannot switch to main in the VM: "
+        "these files have uncommitted changes and differ on main:\n  uv.lock\n" in result.output
+    )
+    assert "notes.txt" not in result.output and "README.md" not in result.output
+    assert "Commit or stash them, choose another branch with --branch" in result.output
+    assert "--no-branch" in result.output
+    assert not env.runner.find("limactl")
+
+
+def test_new_fails_on_an_untracked_file_the_branch_would_overwrite(env):
+    ready(env)
+    existing_branch_with_changes(env, between="docs/new page.md\0", untracked="docs/new page.md\0scratch.txt\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--branch", "main"])
+    assert result.exit_code == 1
+    assert "  docs/new page.md\n" in result.output
+    assert "scratch.txt" not in result.output
+    assert not env.runner.find("limactl clone")
+
+
+def test_new_fails_on_the_branch_check_before_asking_about_aws(env):
+    ready(env)
+    (env.home / ".aws").mkdir()
+    (env.home / ".aws/config").write_text("[default]\n")
+    existing_branch_with_changes(env, dirty="uv.lock\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a"], input="main\n", interactive=True)
+    assert result.exit_code == 1
+    assert "error [preflight]: cannot switch to main" in result.output
+    assert "AWS" not in result.output
+    assert "Git branch" in result.output and result.output.count("Git branch") == 1  # asked once, not again
+
+
+def test_new_allows_uncommitted_changes_the_branch_does_not_touch(env):
+    ready(env)
+    existing_branch_with_changes(env, between="README.md\0", dirty="uv.lock\0", untracked="scratch.txt\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--branch", "main"])
+    assert result.exit_code == 0, result.output
+    assert switch_commands(env) == [f"limactl shell {INSTANCE} git -C {WORKDIR} switch main"]
+
+
+def test_new_allows_uncommitted_changes_on_the_branch_already_checked_out(env):
+    ready(env)
+    existing_branch_with_changes(env, current="main", dirty="uv.lock\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--branch", "main"])
+    assert result.exit_code == 0, result.output
+    assert not env.runner.find(host_git(env, "diff"))
+
+
+def test_new_allows_uncommitted_changes_when_the_branch_is_new(env):
+    ready(env)
+    env.runner.on(host_git(env, "diff --name-only --no-renames -z HEAD --"), "uv.lock\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a"])
+    assert result.exit_code == 0, result.output
+    assert not env.runner.find(host_git(env, "diff"))
+    assert switch_commands(env) == [f"limactl shell {INSTANCE} git -C {WORKDIR} switch -c feat-a"]
+
+
+def test_new_checks_the_branch_switch_from_a_detached_head(env):
+    ready(env)
+    existing_branch_with_changes(env, current="", dirty="uv.lock\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--branch", "main"])
+    assert result.exit_code == 1
+    assert "error [preflight]: cannot switch to main" in result.output
+
+
+def test_new_no_branch_runs_no_git_check_on_the_host(env):
+    ready(env)
+    existing_branch_with_changes(env, dirty="uv.lock\0")
+    result = env.invoke(["new", "preludian/myapp", "feat-a", "--no-branch"])
+    assert result.exit_code == 0, result.output
+    assert not env.runner.find(host_git(env, ""))
+
+
 def shell_opens(env):
     return [
         c

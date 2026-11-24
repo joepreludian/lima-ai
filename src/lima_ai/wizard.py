@@ -57,7 +57,43 @@ def fill(
         branch = None
     elif branch is None:
         branch = ask_branch(workspace) if interactive else workspace
+    if branch:
+        check_branch_switch(cfg, runner, project, branch)
     return Request(project=project, workspace=workspace, branch=branch)
+
+
+def check_branch_switch(cfg: Config, runner: Runner, project: str, branch: str) -> None:
+    """Fail now when `git switch <branch>` is sure to fail in the VM.
+
+    The VM gets the host's working copy, uncommitted changes included, and switches there. Git refuses
+    when the branch exists, is not the one checked out, and a file with uncommitted changes (or an
+    untracked one) differs between the two. A new branch carries the changes along, so it passes.
+    """
+    git = ["git", "-C", str(cfg.developer_dir / project)]
+
+    def names(*args: str) -> set[str]:
+        out = runner.run([*git, *args], check=False, step="preflight")
+        return set(filter(None, out.stdout.split("\0"))) if out.returncode == 0 else set()
+
+    exists = runner.run([*git, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], check=False)
+    if exists.returncode != 0:
+        return
+    current = runner.run([*git, "symbolic-ref", "-q", "--short", "HEAD"], check=False)
+    if current.returncode == 0 and current.stdout.strip() == branch:
+        return
+    diff = ("diff", "--name-only", "--no-renames", "-z", "HEAD")
+    between = names(*diff, branch)
+    changed = names(*diff, "--") | names("ls-files", "--others", "--exclude-standard", "-z")
+    blocking = sorted(between & changed)
+    if blocking:
+        files = "\n".join(f"  {name}" for name in blocking)
+        raise LimaAiError(
+            "preflight",
+            f"cannot switch to {branch} in the VM: these files have uncommitted changes and differ on {branch}:\n"
+            f"{files}\n"
+            "Commit or stash them, choose another branch with --branch, "
+            "or keep the current branch with --no-branch.",
+        )
 
 
 def choose_project(cfg: Config, runner: Runner) -> str:

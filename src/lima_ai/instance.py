@@ -347,7 +347,6 @@ def new(
         sync_project(ws, instance, ask=False)
         if branch:
             switch_branch(ws, branch)
-        card = ws.shell(["bash", "-c", "exec ~/.local/bin/lima-ai-info"], step="info").stdout
     except LimaAiError as err:
         raise LimaAiError(
             err.step,
@@ -360,11 +359,10 @@ def new(
     try:
         run_post_create(ws)
     except LimaAiError:
-        # The VM itself is ready: its connection details are shown all the same.
-        click.echo(card, nl=False)
+        # The VM itself is ready: the backups notice is shown all the same.
         click.echo(backups_notice(cfg), nl=False)
         raise
-    click.echo(card, nl=False)  # as the VM printed it: the host adds nothing to the connection details
+    # No connection card here: the VM prints it as the greeting of each shell session (prompt.sh).
     click.echo(f"Open it with: {ws.hint('shell')}")
     click.echo(backups_notice(cfg), nl=False)
 

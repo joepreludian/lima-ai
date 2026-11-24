@@ -45,7 +45,7 @@ sequenceDiagram
     opt branch
         CLI->>VM: git switch
     end
-    CLI-->>You: the VM's connection card, then an offer to open a shell
+    CLI-->>You: how to open it, then an offer to open a shell
 ```
 
 ### Every VM has its own address

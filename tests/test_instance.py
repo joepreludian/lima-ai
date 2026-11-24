@@ -10,7 +10,7 @@ import pytest
 from lima_ai import instance, menu, wizard
 from lima_ai.config import SyncConfig, config_dir, load_config, state_dir
 from lima_ai.errors import LimaAiError
-from tests.conftest import CARD, GUEST_HOME
+from tests.conftest import GUEST_HOME
 from tests.fakes import lima_list
 
 INSTANCE = "dev-myapp-feat-a"
@@ -125,16 +125,15 @@ def test_new_passes_resource_overrides_to_clone(env):
     assert f"limactl clone --tty=false dev-base {INSTANCE} --cpus 2 --memory 4 --disk 80" in env.runner.commands
 
 
-def test_new_prints_the_card_from_the_vm_and_how_to_open_it(env):
+def test_new_prints_how_to_open_the_vm_and_leaves_the_card_to_the_shell(env):
     env.write_token()
     base_then_clone(env)
     result = env.invoke(["new", "preludian/myapp", "feat-a"])
     assert result.exit_code == 0, result.output
-    assert env.runner.find(f"limactl shell {INSTANCE} bash -c 'exec ~/.local/bin/lima-ai-info'")
-    # The card is printed as the VM produced it; the host adds nothing about the VM around it.
+    # The card is the shell's greeting (prompt.sh): new does not run lima-ai-info at all.
+    assert not env.runner.find("exec ~/.local/bin/lima-ai-info")
     assert result.stdout == (
-        CARD
-        + "Open it with: lima-ai shell preludian/myapp feat-a\n"
+        "Open it with: lima-ai shell preludian/myapp feat-a\n"
         + f"Backups: /backups in the VM is {env.cfg.backups_dir} on this Mac, read-write.\n"
         + "docker-backup is installed in the VM; see https://lima-ai.readthedocs.io/docker-backups/\n"
     )
@@ -175,17 +174,6 @@ def test_new_takes_created_at_before_asking_anything(env, monkeypatch):
     record = json.loads((state_dir() / f"instances/{INSTANCE}.json").read_text())
     assert record["created_at"] == "2026-11-01T14:00:00Z"
     assert "LIMA_AI_CREATED_AT=2026-11-01T14:00:00Z\n" in instance_file_pushes(env)[0].input
-
-
-def test_new_card_failure_keeps_the_vm_and_points_at_sync_claude(env):
-    env.write_token()
-    base_then_clone(env)
-    env.runner.on("exec ~/.local/bin/lima-ai-info", returncode=1, stderr="bash: lima-ai-info: No such file")
-    result = env.invoke(["new", "preludian/myapp", "feat-a"])
-    assert result.exit_code == 1
-    assert "error [info]" in result.output
-    assert f"{INSTANCE} is kept" in result.output
-    assert "lima-ai sync-claude preludian/myapp feat-a" in result.output
 
 
 def info_script_pushes(env):
@@ -1488,7 +1476,7 @@ def test_new_runs_the_post_create_commands_in_order_once_the_vm_is_filled(env):
         f"LIMA_AI_FQDN=lima-{INSTANCE}.local",
     ]
     # Each command reaches bash as one argument, as written in config.toml, behind a line that sends
-    # its stdout to stderr: lima-ai's own stdout carries the connection card only.
+    # its stdout to stderr: lima-ai's own stdout carries its closing lines only.
     assert [call.argv for call in calls] == [
         ["env", *variables, "bash", "-c", "exec >&2\n" + command] for command in POST_CREATE
     ]
@@ -1496,7 +1484,7 @@ def test_new_runs_the_post_create_commands_in_order_once_the_vm_is_filled(env):
     assert all(call.interactive for call in calls)
     cmds = env.runner.commands
     assert cmds.index(calls[0].command) > max(i for i, c in enumerate(cmds) if c.startswith("rsync "))
-    assert result.output.index("==> Post-create commands") < result.output.index(CARD)
+    assert result.output.index("==> Post-create commands") < result.output.index("Open it with:")
 
 
 def test_new_without_post_create_commands_runs_none(env):
@@ -1519,7 +1507,7 @@ def test_a_failing_post_create_command_stops_the_rest_and_keeps_the_vm(env):
     assert "error [post-create]" in result.output
     assert POST_CREATE[0] in result.output and "(exit 3)" in result.output
     assert f"{INSTANCE} is ready and kept" in result.output
-    assert CARD in result.output  # the VM is usable: its connection details are still shown
+    assert "Backups: /backups in the VM" in result.output  # the VM is usable: the notice still shows
     assert "lima-ai shell preludian/myapp feat-a" in result.output
     assert "destroy" not in result.output
 

@@ -7,7 +7,7 @@
 | `base [--rebuild] [--use-hook PATH \| --init-hook PATH]` | Build, check, seal and stop `dev-base`; `--use-hook` runs your script in it after provisioning and remembers it, `--init-hook` writes a commented starter and exits (see [The base image](base-image.md)) |
 | `config [--edit]` | Print the effective settings as TOML; `--edit` opens `~/.config/lima-ai/config.toml` in `$VISUAL`/`$EDITOR`, creating it with every setting commented out |
 | `template` | Print the rendered `dev-base` Lima template |
-| `new [<project>] [<workspace>] [--branch NAME \| --no-branch] [--cpus N] [--memory 16GiB] [--disk 100GiB] [--aws \| --no-aws] [--hooks \| --no-hooks]` | Create a workspace VM; asks for the project (fzf when installed), the workspace and the branch when they are not given, whether to copy `~/.aws`, and (once) which host hooks to copy |
+| `new [<project>] [<workspace>] [--branch NAME \| --no-branch] [--cpus N] [--memory 16GiB] [--disk 100GiB] [--aws \| --no-aws] [--hooks \| --no-hooks]` | Create a workspace VM; asks for the project (fzf when installed), the workspace and the branch when they are not given, whether to copy `~/.aws`, and (once) which host hooks to copy. Stops before creating anything when uncommitted changes on the host would make the branch switch fail in the VM |
 | `shell [<project> <workspace>]` | Open a shell in the VM's working copy, with your SSH agent forwarded; with no arguments, picks the VM for you |
 | `list` (alias `ls`) | List workspace VMs with project, workspace, status, branch and FQDN |
 | `sync [<project> <workspace>]` | Copy the host project into the VM again |
@@ -46,7 +46,7 @@ instead.
 | `lima-ai-info` | Print the VM's connection card (project, workspace, FQDN, IP, creation time and current git branch), then tips: the Ubuntu release, the `cc` alias, which of the base image's tools are installed, and `rtk gain`. `lima-ai-info --fqdn` prints only the VM's name, for scripts and for Claude |
 | `lima-ai-claude-setup` | Mark Claude's onboarding as done in `~/.claude.json` and wire rtk into `~/.claude` (`rtk init -g --auto-patch`), then write `~/.claude/LIMA_AI.md` (tells Claude to bind to `0.0.0.0` and give URLs with the VM's name) and reference it from `CLAUDE.md`; both commands run it after copying the Claude config |
 
-`new` runs it for you when the VM is ready. It reads `~/.config/lima-ai/instance`,
+The shell prompt runs it for you, once per session. It reads `~/.config/lima-ai/instance`,
 which `new` writes; on a VM made by an older lima-ai, `sync-claude` creates
 that file with an unknown creation time.
 
